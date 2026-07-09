@@ -26,7 +26,7 @@ def _mk(**kw) -> Settings:
 
 def test_defaults():
     s = _mk()
-    assert s.embedding_model == "text-embedding-3-large"
+    assert s.embedding_model == "BAAI/bge-large-en-v1.5"
     assert s.generation_model == "claude-opus-4-8"
     assert s.chunk_max_chars > s.chunk_overlap >= 0
     assert s.data_dir == "data"
@@ -36,7 +36,7 @@ def test_defaults():
 def test_collection_name_includes_embedding_model():
     s = _mk()
     assert s.collection_base in s.collection_name
-    assert "text-embedding-3-large" in s.collection_name
+    assert "bge-large-en-v1.5" in s.collection_name          # "/" sanitized: BAAI-bge-large-en-v1.5
 
 
 def test_env_loading(monkeypatch):

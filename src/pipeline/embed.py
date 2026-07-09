@@ -1,16 +1,16 @@
 """Stage 7 — embedding generation.
 
-Embed each chunk's ``embed_text`` (the enriched text from Stage 6) with an
-``Embedder`` (default: LangChain ``OpenAIEmbeddings(text-embedding-3-large)``).
-Only cache-misses are sent to the provider, in one batched call; every vector is
-cached by ``sha256(model + embed_text)`` under ``data/.embedding_cache/`` so
-re-runs (and identical chunks across filings) are never re-embedded. Persist
-``{chunk_id, embedding, metadata}`` per document to ``data/embeddings/<doc_id>.json``.
+Embed each chunk's ``embed_text`` (the enriched text from Stage 6) with an ``Embedder``
+(default: **local** ``BAAI/bge-large-en-v1.5`` via ``sentence-transformers`` — no API, 1024-dim,
+cosine-normalized). Only cache-misses are encoded; every vector is cached by
+``sha256(model + embed_text)`` under ``data/.embedding_cache/`` so re-runs (and identical chunks
+across filings) are never re-embedded. Persist ``{chunk_id, embedding, metadata}`` per document to
+``data/embeddings/<doc_id>.json``.
 
-The API key is read from config/env only when a real ``OpenAIEmbedder`` is
-constructed — importing this module never requires a key or the openai package.
+The model is loaded lazily only when a real ``BgeEmbedder`` is constructed — importing this module
+never requires the ``sentence-transformers`` package.
 
-Run standalone:  python -m src.pipeline.embed   (needs OPENAI_API_KEY)
+Run standalone:  python -m src.pipeline.embed   (needs: pip install sentence-transformers)
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from src.schemas import Chunk, EmbeddingRecord
 
 
 class Embedder(Protocol):
-    """Swappable embedding backend (OpenAI by default; Voyage/local are alternatives)."""
+    """Swappable embedding backend (local BGE by default; any provider is a drop-in)."""
 
     model: str
 
@@ -34,26 +34,33 @@ class Embedder(Protocol):
     def embed_query(self, text: str) -> list[float]: ...
 
 
-class OpenAIEmbedder:
-    """LangChain OpenAIEmbeddings wrapper (text-embedding-3-large by default)."""
+class BgeEmbedder:
+    """Local ``BAAI/bge-large-en-v1.5`` via sentence-transformers (no API, cosine-normalized).
 
-    def __init__(self, model: str | None = None, api_key: str | None = None):
-        from langchain_openai import OpenAIEmbeddings  # lazy: only when actually embedding
+    Per the bge-v1.5 retrieval recipe, the QUERY is prefixed with a short instruction while passages
+    (documents) get none — this materially improves short-query → passage retrieval.
+    """
+
+    QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+    def __init__(self, model: str | None = None):
+        from sentence_transformers import SentenceTransformer  # lazy: only when actually embedding
 
         self.model = model or settings.embedding_model
-        # Explicit batch size + retries (OpenAI SDK applies exponential backoff on 429/5xx).
-        self._client = OpenAIEmbeddings(
-            model=self.model,
-            api_key=api_key or settings.require_openai_key(),
-            chunk_size=settings.embed_batch_size,
-            max_retries=settings.embed_max_retries,
+        self._st = SentenceTransformer(self.model)
+
+    def _encode(self, texts: list[str]) -> list[list[float]]:
+        vecs = self._st.encode(
+            texts, batch_size=settings.embed_batch_size,
+            normalize_embeddings=True, show_progress_bar=False, convert_to_numpy=True,
         )
+        return [v.tolist() for v in vecs]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._client.embed_documents(texts)
+        return self._encode(list(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return self._client.embed_query(text)
+        return self._encode([self.QUERY_INSTRUCTION + text])[0]
 
 
 def cache_key(model: str, text: str) -> str:
@@ -89,7 +96,7 @@ def embed_texts(texts: list[str], embedder: Embedder, cache: EmbeddingCache) -> 
 
 
 def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> dict:
-    embedder = embedder or OpenAIEmbedder()
+    embedder = embedder or BgeEmbedder()
     cache = EmbeddingCache(base=base)
     chunks = [Chunk(**c) for c in load_artifact("chunks", doc_id, base=base)]
     texts = [c.embed_text or c.text for c in chunks]                   # embed the enriched text
@@ -104,7 +111,7 @@ def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> di
 
 
 def run_all(*, embedder: Embedder | None = None, base=None) -> dict:
-    embedder = embedder or OpenAIEmbedder()                            # construct once (fail fast on key/deps)
+    embedder = embedder or BgeEmbedder()                               # load the model once
     r = run_docs("embed", list_artifacts("chunks", base=base),
                  lambda d: run_embed(d, embedder=embedder, base=base), base=base)
     return {"files": r["ok"], "failed": r["failed"],
@@ -115,9 +122,9 @@ def run_all(*, embedder: Embedder | None = None, base=None) -> dict:
 if __name__ == "__main__":
     try:
         r = run_all()
-    except ImportError:                                               # langchain-openai not installed
-        print("Stage 7 embed: install deps first (pip install -r requirements.txt).")
-    except RuntimeError as exc:                                       # e.g. missing OPENAI_API_KEY
+    except ImportError:                                               # sentence-transformers not installed
+        print("Stage 7 embed: install the embedder first (pip install sentence-transformers).")
+    except RuntimeError as exc:
         print(f"Stage 7 embed: {exc}")
     else:
         print(f"Stage 7 embed: {r['chunks']:,} chunks embedded across {r['files']} files "

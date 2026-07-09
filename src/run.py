@@ -58,7 +58,7 @@ def run(
 
     def get_embedder():
         if _embedder["e"] is None:
-            _embedder["e"] = embed.OpenAIEmbedder()
+            _embedder["e"] = embed.BgeEmbedder()
         return _embedder["e"]
 
     raw_docs = lambda: list_artifacts("raw", "txt", base=base)          # noqa: E731

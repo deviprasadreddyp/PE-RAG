@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr = SecretStr("")    # the single answer-generation call (Phase 2)
 
     # --- Models ---
-    embedding_model: str = "text-embedding-3-large"
+    embedding_model: str = "BAAI/bge-large-en-v1.5"   # local (sentence-transformers), 1024-dim, no API
     generation_model: str = "claude-opus-4-8"
 
     # --- Chunking: Section-Aware Hierarchical Chunking (see architecture/CHUNKING_STRATEGY.md) ---

@@ -1,9 +1,9 @@
 """Stage 6a — dense (vector) retrieval (deterministic given the index; no LLM).
 
-Embed the query with the same model used at ingestion (OpenAI text-embedding-3-large,
-behind the ``Embedder`` protocol) and query Chroma within the hard filter. Cosine distance
-is converted to a similarity (``1 - distance``). Chroma returns the document text, so results
-are fully hydrated ``Chunk`` s.
+Embed the query with the same model used at ingestion (local BAAI/bge-large-en-v1.5, behind the
+``Embedder`` protocol — the query gets the bge instruction prefix) and query Chroma within the hard
+filter. Cosine distance is converted to a similarity (``1 - distance``). Chroma returns the document
+text, so results are fully hydrated ``Chunk`` s.
 
 Also provides ``hydrate_texts`` to fill in text for candidates that came from BM25 (which
 stores no document text) — a single ``store.get`` by id.

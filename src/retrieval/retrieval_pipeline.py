@@ -57,8 +57,8 @@ def _default_index():
 
 
 def _default_embedder():
-    from src.pipeline.embed import OpenAIEmbedder
-    return OpenAIEmbedder()
+    from src.pipeline.embed import BgeEmbedder
+    return BgeEmbedder()
 
 
 def answer_query(query: str, *, store=None, index=None, embedder=None, reranker=None,
