@@ -81,3 +81,26 @@ def test_deadletter_written_empty_when_all_ok(tmp_path):
     report = run_ingest(corpus, base=out)
     assert report["failed"] == 0
     assert load_artifact("raw", "_dead_letter", base=out) == []
+
+
+def test_raw_index_and_incremental_change_detection(tmp_path):
+    corpus = _corpus(tmp_path, {GOOD: HEADER + BODY}, [GOOD])
+    out = tmp_path / "out"
+
+    rep = run_ingest(corpus, base=out)
+    idx = json.loads((out / "raw_index.json").read_text("utf-8"))
+    assert len(idx) == 1
+    rec = idx[0]
+    assert rec["doc_id"] == doc_id_for(GOOD)
+    assert len(rec["sha256"]) == 64 and rec["size"] > 0 and rec["status"] == "ok"
+    assert rec["filename"] == GOOD
+    assert rep["changed"] == [doc_id_for(GOOD)]          # first run: everything is "new"
+
+    # re-run with no source change -> nothing changed
+    rep2 = run_ingest(corpus, base=out)
+    assert rep2["changed"] == []
+
+    # modify the source -> the hash changes and it is flagged
+    (corpus / GOOD).write_text(HEADER + BODY + "\nEXTRA", encoding="utf-8", newline="")
+    rep3 = run_ingest(corpus, base=out)
+    assert rep3["changed"] == [doc_id_for(GOOD)]

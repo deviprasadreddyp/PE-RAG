@@ -117,3 +117,21 @@ class Answer(_Base):
     sources: list[Citation] = Field(default_factory=list)
     retrieved: list[RetrievalResult] = Field(default_factory=list)
     usage: dict = Field(default_factory=dict)   # input_tokens/output_tokens/cost_usd/latency_s
+
+
+class Document(_Base):
+    """A discovered source document (Stage 1) — powers incremental indexing via sha256."""
+
+    doc_id: str
+    filename: str
+    sha256: str
+    size: int
+    status: str = "ok"
+
+
+class EmbeddingRecord(_Base):
+    """A chunk's embedding + its Chroma-safe metadata (Stage 7 output)."""
+
+    chunk_id: str
+    embedding: list[float]
+    metadata: dict

@@ -22,7 +22,7 @@ from typing import Protocol
 
 from src.config import settings
 from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
-from src.schemas import Chunk
+from src.schemas import Chunk, EmbeddingRecord
 
 
 class Embedder(Protocol):
@@ -95,11 +95,12 @@ def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> di
     texts = [c.embed_text or c.text for c in chunks]                   # embed the enriched text
     vectors = embed_texts(texts, embedder, cache)
     records = [
-        {"chunk_id": c.id, "embedding": v, "metadata": c.metadata()}
+        EmbeddingRecord(chunk_id=c.id, embedding=v, metadata=c.metadata())
         for c, v in zip(chunks, vectors)
     ]
     persist_artifact("embeddings", doc_id, records, base=base)
-    return {"doc_id": doc_id, "count": len(records), "dim": len(records[0]["embedding"]) if records else 0}
+    return {"doc_id": doc_id, "count": len(records),
+            "dim": len(records[0].embedding) if records else 0}
 
 
 def run_all(*, embedder: Embedder | None = None, base=None) -> dict:

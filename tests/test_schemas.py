@@ -3,7 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from src.schemas import Answer, Chunk, Citation, DocMetadata, RetrievalResult, SectionSpan
+from src.schemas import (
+    Answer, Chunk, Citation, DocMetadata, Document, EmbeddingRecord,
+    RetrievalResult, SectionSpan,
+)
 
 
 def _meta(**kw) -> DocMetadata:
@@ -69,3 +72,16 @@ def test_extra_fields_forbidden():
     with pytest.raises(ValidationError):
         DocMetadata(company="x", ticker="X", form="10-K", filing_date="2024-01-01",
                     source_file="x.txt", bogus="nope")
+
+
+def test_document_roundtrip_and_default_status():
+    d = Document(doc_id="AAPL_10K_2024", filename="AAPL_10K_2024_full.txt",
+                 sha256="a" * 64, size=1024)
+    assert d.status == "ok"
+    assert Document.model_validate_json(d.model_dump_json()) == d
+
+
+def test_embedding_record_roundtrip():
+    e = EmbeddingRecord(chunk_id="AAPL_10K_2024__RiskFactors_c00",
+                        embedding=[0.1, -0.2, 0.3], metadata={"ticker": "AAPL", "year": 2024})
+    assert EmbeddingRecord.model_validate_json(e.model_dump_json()) == e

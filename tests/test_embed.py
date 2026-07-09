@@ -2,7 +2,7 @@
 
 from src.observability import load_artifact, persist_artifact
 from src.pipeline.embed import EmbeddingCache, cache_key, embed_texts, run_embed
-from src.schemas import Chunk, DocMetadata
+from src.schemas import Chunk, DocMetadata, EmbeddingRecord
 
 
 class FakeEmbedder:
@@ -66,6 +66,7 @@ def test_persisted_record_shape_and_metadata(tmp_path):
     assert rep == {"doc_id": "AAPL_10K_2024", "count": 1, "dim": 2}
     r0 = recs[0]
     assert set(r0) == {"chunk_id", "embedding", "metadata"}
+    assert EmbeddingRecord.model_validate(r0)                     # persisted as a typed record
     assert r0["chunk_id"] == "AAPL_10K_2024_0"
     assert r0["metadata"]["ticker"] == "AAPL" and "text" not in r0["metadata"]
     assert len(r0["embedding"]) == 2
