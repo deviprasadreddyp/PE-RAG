@@ -178,7 +178,7 @@ the eval set). A refusal ("Information unavailable") always reports **Low**.
 | **Pipeline logs** | per-stage `<stage>_failures.json` (dead-lettered docs) | ✅ |
 | **Query logs** | `data/logs/queries.jsonl`: question, intents, filter, bm25/vector/rrf/reranked/evidence ids, prompt_version, guardrail, latency, tokens, cost | ✅ |
 | **Application logs** | operational stdout/stderr (run/inspect summaries) | ⚠️ (print-based) |
-| **Evaluation logs** | `data/logs/eval_report.json`: per-case metrics + summary (recall/precision@k, MRR, NDCG, citation coverage) | ✅ |
+| **Evaluation logs** | `data/logs/eval_report.{json,html}`: per-case + retrieval A/B + RAGAS summary + regression vs previous run (see `EVALUATION.md`) | ✅ |
 
 ## 12. Cost & latency tracking (built)
 

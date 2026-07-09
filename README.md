@@ -132,9 +132,23 @@ uvicorn src.api.main:app --reload          # docs at http://127.0.0.1:8000/docs
 # Streamlit debug UI — answer + every deterministic stage, with clickable citations
 streamlit run src/frontend/app.py
 
-# Retrieval/answer evaluation over the golden set (needs the built index + keys)
-python -m src.eval.run_eval                 # writes data/logs/eval_report.json
+# Evaluation over the golden set — retrieval A/B + metrics (+ optional RAGAS)
+python -m src.eval.run_eval                 # writes data/logs/eval_report.{json,html}
+streamlit run src/eval/dashboard.py         # visual dashboard (after a run)
 ```
+
+### Evaluation — "how do you know it works?"
+
+A first-class evaluation framework (`src/eval/`, see [`architecture/EVALUATION.md`](architecture/EVALUATION.md)):
+- **Golden set** of 25 business questions with metadata ground truth (+ 2 refusal cases).
+- **Retrieval metrics** (Recall@k, Precision@k, MRR, NDCG@k) and an **A/B harness** that proves
+  hybrid + rerank beat vector- or BM25-only *with numbers* (pooled recall).
+- **RAGAS** generation grading (faithfulness, answer_relevancy, context precision/recall) — grader
+  LLM via OpenRouter, embeddings local. Optional (`pip install ragas langchain-huggingface`).
+- **LangSmith** tracing (prompt/tokens/latency) — on when `LANGSMITH_API_KEY` is set.
+- **Reports** (`eval_report.json` + `.html`) with a **regression** diff vs the previous run, and a
+  **Streamlit dashboard**. Every metric/report/regression function is pure and unit-tested; live
+  grading is gated on the built index + keys.
 
 Both need the index built (stages 7–8) and the relevant API key; without them the pipeline
 returns a grounded refusal rather than crashing.

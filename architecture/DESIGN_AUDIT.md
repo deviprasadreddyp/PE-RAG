@@ -229,8 +229,10 @@ or local ML; refusals make zero LLM calls.
     *Provider later switched from Claude to OpenAI-via-OpenRouter, and embeddings to local bge — see
     ADR-013/014.*
 14. **Confidence score** — deterministic similarity bands in `guardrails.py`, overrides the model's. (P13)
-15. **Per-query logging** + **eval harness** — `query_log.py` (JSONL) + `src/eval/` (metrics + golden
-    set: precision@k, recall@k, MRR, NDCG, citation coverage). (P18, P21)
+15. **Per-query logging** + **evaluation framework** — `query_log.py` (JSONL) + `src/eval/`: 25-case
+    golden set, retrieval metrics (Recall/Precision@k, MRR, NDCG), **A/B harness** (vector vs BM25 vs
+    hybrid vs +rerank), **RAGAS** generation grading, **LangSmith** tracing, JSON+HTML reports with
+    **regression** diff, and a Streamlit dashboard. (P18, P21, EV1–EV6 — see `EVALUATION.md`)
 16. **Debug UI** (Streamlit) `src/frontend/app.py` + **FastAPI** `src/api/main.py`. (P19, P20)
 17. **Cost & latency tracking** — `query_log.py` (Claude pricing, wall-clock latency). (P18)
 

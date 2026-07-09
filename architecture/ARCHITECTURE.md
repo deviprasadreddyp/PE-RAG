@@ -13,9 +13,9 @@ rerank → guardrails → one Claude call → cited answer), plus FastAPI, Strea
 | **Physical** | *How* exactly — classes, config, schema, algorithms, policies, logging? | [`PHYSICAL_SPEC.md`](PHYSICAL_SPEC.md) |
 | **Behavioral / Operational** | Contracts, sequence, decision trees, failure matrix, budgets (Phase 2) | [`RETRIEVAL_DESIGN.md`](RETRIEVAL_DESIGN.md) |
 
-Supporting: [`ADR.md`](ADR.md) (decision records) · [`ASSUMPTIONS.md`](ASSUMPTIONS.md) ·
-[`corpus_notes.md`](corpus_notes.md) (dataset findings) · [`DESIGN_AUDIT.md`](DESIGN_AUDIT.md)
-(design vs implementation status).
+Supporting: [`ADR.md`](ADR.md) (decision records) · [`EVALUATION.md`](EVALUATION.md) (eval framework)
+· [`ASSUMPTIONS.md`](ASSUMPTIONS.md) · [`corpus_notes.md`](corpus_notes.md) (dataset findings) ·
+[`DESIGN_AUDIT.md`](DESIGN_AUDIT.md) (design vs implementation status).
 
 ---
 
