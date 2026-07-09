@@ -39,9 +39,11 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     generation_model: str = "claude-opus-4-8"
 
-    # --- Chunking (placeholder defaults; refined from corpus inspection in commit 5) ---
-    chunk_size: int = Field(1000, gt=0)
-    chunk_overlap: int = Field(150, ge=0)
+    # --- Chunking (characters; dataset-driven, see architecture/corpus_notes.md) ---
+    # Filings have ~no blank-line paragraphs, so we chunk on a fixed char window
+    # (~750 tokens) within detected sections. Starting point; tuned by the retrieval eval.
+    chunk_size: int = Field(3000, gt=0)
+    chunk_overlap: int = Field(300, ge=0)
 
     # --- Retrieval (Phase 2) ---
     top_k: int = Field(8, gt=0)
