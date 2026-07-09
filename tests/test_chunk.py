@@ -32,9 +32,15 @@ def test_section_assignment_matches_source():
         assert c.section == ("Business" if "alpha" in c.text else "Risk Factors")
 
 
-def test_ids_sequential_and_stable_across_runs():
+def test_ids_are_section_aware_unique_and_stable():
     a, b = _chunks(), _chunks()
-    assert [c.id for c in a] == [f"AAPL_10K_2024_{i}" for i in range(len(a))]
+    ids = [c.id for c in a]
+    assert len(ids) == len(set(ids))                            # unique
+    assert all(c.id.startswith("AAPL_10K_2024__") for c in a)   # doc-id prefixed
+    biz = [c for c in a if c.section == "Business"]
+    risk = [c for c in a if c.section == "Risk Factors"]
+    assert biz[0].id == "AAPL_10K_2024__Business_c00"           # section slug + per-section index
+    assert risk[0].id == "AAPL_10K_2024__RiskFactors_c00"
     assert [(c.id, c.text) for c in a] == [(c.id, c.text) for c in b]   # deterministic
 
 

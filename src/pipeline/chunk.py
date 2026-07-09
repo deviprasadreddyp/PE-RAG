@@ -7,7 +7,8 @@ independently into retrieval-sized *child* chunks with LangChain's
 line -> sentence -> word, hard-splitting only as a last resort). Chunks therefore
 never span two sections. Each ``Chunk`` records its place in the hierarchy
 (``section_index`` = which parent, ``section_chunk_index`` = position within it,
-``chunk_index`` = global order), a stable id ``"{doc_id}_{index}"``, and the full
+``chunk_index`` = global order), a stable **section-aware** id
+``"{doc_id}__{SectionSlug}_c{NN}"`` (e.g. `AAPL_10K_2022Q3_2022-10-28__RiskFactors_c03`), and the full
 filing metadata (``embed_text`` is filled in Stage 6). Persist to
 ``data/chunks/<doc_id>.json``. Deterministic; no LLM.
 
@@ -16,6 +17,8 @@ Run standalone:  python -m src.pipeline.chunk
 
 from __future__ import annotations
 
+import re
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import settings
@@ -23,6 +26,13 @@ from src.observability import list_artifacts, load_artifact, persist_artifact, r
 from src.schemas import Chunk, DocMetadata, SectionSpan
 
 SEPARATORS = ["\n\n", "\n", ". ", " ", ""]   # real boundaries first; "" hard-splits as last resort
+_WORD = re.compile(r"[A-Za-z0-9]+")
+
+
+def _slug(section_name: str) -> str:
+    """'Risk Factors' -> 'RiskFactors' (CamelCase, alnum only, capped)."""
+    s = "".join(w[:1].upper() + w[1:] for w in _WORD.findall(section_name))[:30]
+    return s or "Section"
 
 
 def make_splitter(chunk_size: int | None = None, chunk_overlap: int | None = None):
@@ -41,23 +51,25 @@ def chunk_document(
     """Split each section independently into Chunks with a global running index."""
     splitter = splitter or make_splitter()
     out: list[Chunk] = []
+    used: set[str] = set()
     idx = 0
     for section_index, span in enumerate(sections):          # parent nodes
+        slug = _slug(span.section_name)
         section_chunk_index = 0
         for piece in splitter.split_text(cleaned[span.start:span.end]):   # children within the parent
             piece = piece.strip()
             if not piece:
                 continue
+            # section-aware, deterministic id: e.g. "AAPL_10K_2022Q3_2022-10-28__RiskFactors_c03"
+            cid = f"{doc_id}__{slug}_c{section_chunk_index:02d}"
+            if cid in used:                                  # deterministic guard (duplicate section names)
+                cid = f"{cid}_{idx}"
+            used.add(cid)
             out.append(
                 Chunk.from_metadata(
-                    meta,
-                    id=f"{doc_id}_{idx}",
-                    doc_id=doc_id,
-                    chunk_index=idx,
-                    section=span.section_name,
-                    section_index=section_index,
-                    section_chunk_index=section_chunk_index,
-                    text=piece,
+                    meta, id=cid, doc_id=doc_id, chunk_index=idx,
+                    section=span.section_name, section_index=section_index,
+                    section_chunk_index=section_chunk_index, text=piece,
                 )
             )
             idx += 1
