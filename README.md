@@ -8,9 +8,13 @@ We don't "build a RAG" — we build an observable pipeline where **every stage p
 inspectable artifact**, all processing is **deterministic except the one generation call**, and the
 whole system is traceable end to end.
 
-> **Status.** The offline **ingestion & indexing pipeline (Stages 1–8) is built and tested**
-> (82 passing tests). Retrieval, the single Claude call, per-query logging, and the FastAPI/Streamlit
-> front-end are **Phase 2** (see `architecture/INGESTION_COMMIT_PLAN.md`).
+> **Status.** Both phases are **built and tested** (209 tests): the offline **ingestion & indexing
+> pipeline** (Stages 1–8) and the online **retrieval + single-call generation** layer (validation →
+> query understanding → hybrid retrieval → RRF → rerank → guardrails → one Claude call → cited
+> answer), plus per-query logging, an eval harness, a FastAPI service, and a Streamlit debug UI.
+> The only **deferred** steps need external resources: the real embed/store run (`OPENAI_API_KEY`),
+> a live Claude call (`ANTHROPIC_API_KEY`), and the optional cross-encoder reranker
+> (`pip install sentence-transformers`). See `architecture/RETRIEVAL_DESIGN.md` and `ADR.md`.
 
 ## The one hard rule
 
@@ -32,12 +36,19 @@ OFFLINE (python -m src.run --stage all) — one inspectable artifact per stage:
    → embed    → data/embeddings/   OpenAI text-embedding-3-large, batched, content-hash cached
    → store    → data/vectorstore/  Chroma (vectors + text + metadata) + BM25 index
 
-ONLINE (Phase 2) — per question, no LLM until the last step:
- question → metadata filter → hybrid retrieve (dense + BM25 → RRF) → context
-          → ONE Claude call (grounded, cite-or-refuse) → answer + citations → data/logs/
+ONLINE (src/retrieval/retrieval_pipeline.py) — per question, no LLM until the last step:
+ question → validate → classify + extract metadata → hard filter → plan
+          → hybrid retrieve (vector top-20 + BM25 top-20) → RRF (k=60) → rerank (top-8)
+          → dedup → evidence [E1..] → guardrails (cite-or-refuse)
+          → ONE Claude call (grounded, structured) → answer + citations → data/logs/queries.jsonl
 ```
 
-Design docs: [`architecture/HLD.md`](architecture/HLD.md) ·
+Everything left of the single call is deterministic or local ML; refusals (invalid query, weak
+evidence, missing company) make **zero** LLM calls.
+
+Design docs: [`architecture/RETRIEVAL_DESIGN.md`](architecture/RETRIEVAL_DESIGN.md) (Phase 2 TDS) ·
+[`architecture/ADR.md`](architecture/ADR.md) (decision records) ·
+[`architecture/HLD.md`](architecture/HLD.md) ·
 [`architecture/CHUNKING_STRATEGY.md`](architecture/CHUNKING_STRATEGY.md) ·
 [`architecture/corpus_notes.md`](architecture/corpus_notes.md) (dataset findings).
 
@@ -50,18 +61,42 @@ Design docs: [`architecture/HLD.md`](architecture/HLD.md) ·
 | 3 | metadata | `src/pipeline/metadata.py` | `data/metadata/` | header wins over filename; backfills fiscal period |
 | 4 | sections | `src/pipeline/sections.py` | `data/sections/` | inline `Item N.` headings; 92% detected, graceful "Other" fallback |
 | 5 | chunk | `src/pipeline/chunk.py` | `data/chunks/` | recursive splitting **within** sections (parent→child) |
-| 6 | enrich | `src/pipeline/enrich.py` | `data/chunks/` | `embed_text` = context header + text (idempotent) |
+| 6 | enrich | `src/pipeline/enrich.py` | `data/chunks/` | `embed_text` = `Company (Ticker) \| Filing \| Year \| Quarter \| Section` + text (idempotent) |
 | 7 | embed | `src/pipeline/embed.py` | `data/embeddings/` | OpenAI `text-embedding-3-large`, batched + cached |
 | 8 | store | `src/pipeline/store.py` | `data/vectorstore/` | Chroma upsert (idempotent) + BM25 |
 
 Orchestrator: `src/run.py`. Inspection: `src/inspect.py`. Corpus spike: `scripts/inspect_corpus.py`.
 
+### Online — retrieval & generation (`src/retrieval/`, `src/generation/`)
+
+| Stage | Module | Role |
+|-------|--------|------|
+| validate | `query_validator.py` | reject empty / too-short / too-long / bad-encoding |
+| classify | `query_classifier.py` | rule-based multi-label intent (Comparison/Trend/Risk/Financial/Temporal) |
+| extract | `metadata_parser.py` | companies (ticker dict) · years · quarters · forms · section intent |
+| filter | `metadata_filter.py` | hard metadata filter (Chroma `where` + BM25 predicate) |
+| plan | `retrieval_planner.py` | per-entity / per-period / global + section boosts |
+| retrieve | `vector_retriever.py`, `bm25_retriever.py` | dense + sparse, within the hard filter |
+| fuse | `hybrid_fusion.py` | Reciprocal Rank Fusion (`Σ 1/(k+rank)`, k=60) |
+| rerank | `reranker.py` | local cross-encoder (optional; identity fallback) |
+| dedup | `deduplicator.py` | drop dup content; cap per section for diversity |
+| evidence | `evidence_builder.py` | `[E1..]` grounding blocks + citation tags |
+| guardrails | `guardrails.py` | coverage · diversity · min-similarity · cite-or-refuse |
+| prompt | `prompt_builder.py` | system (cite-or-refuse) + evidence + question, token-budgeted, versioned |
+| **generate** | `src/generation/generate.py` | **the single Claude call** (structured output) |
+| parse/cite | `response_parser.py`, `citation_mapper.py` | structured answer + resolved citations |
+
+Orchestrator: `src/retrieval/retrieval_pipeline.py` (`run_query`). Serving: `src/api/main.py`
+(FastAPI). UI: `src/frontend/app.py` (Streamlit). Eval: `src/eval/` (metrics + golden set).
+
 ## Stack
 
-Python 3.11+ · **LangChain** (`RecursiveCharacterTextSplitter`, `OpenAIEmbeddings`, Chroma) ·
+Python 3.11+ · **LangChain** (`RecursiveCharacterTextSplitter`, `OpenAIEmbeddings`, Chroma retriever,
+`PromptTemplate`, `ChatAnthropic` structured output — infrastructure only, no Chains/Agents) ·
 `chromadb` · `rank-bm25` · embeddings **OpenAI `text-embedding-3-large`** (behind an `Embedder`
-protocol; Voyage/local are documented alternatives) · generation **Claude `claude-opus-4-8`** (single
-call, Phase 2) · FastAPI + Streamlit (Phase 2) · `pydantic-settings` · `pytest`.
+protocol) · generation **Claude `claude-opus-4-8`** (single structured call) · cross-encoder
+reranker `sentence-transformers` (optional, lazy, identity fallback) · **FastAPI** + **Streamlit** ·
+`pydantic-settings` · `pytest`.
 
 ## Getting the corpus
 
@@ -87,6 +122,22 @@ python -m src.inspect
 ls data/raw data/cleaned data/metadata data/sections data/chunks data/embeddings data/vectorstore
 ```
 
+### Ask questions (Phase 2)
+
+```bash
+# FastAPI service — POST /query, GET /health, ?debug for the full stage trace
+uvicorn src.api.main:app --reload          # docs at http://127.0.0.1:8000/docs
+
+# Streamlit debug UI — answer + every deterministic stage, with clickable citations
+streamlit run src/frontend/app.py
+
+# Retrieval/answer evaluation over the golden set (needs the built index + keys)
+python -m src.eval.run_eval                 # writes data/logs/eval_report.json
+```
+
+Both need the index built (stages 7–8) and the relevant API key; without them the pipeline
+returns a grounded refusal rather than crashing.
+
 ### Useful commands
 
 ```bash
@@ -95,7 +146,7 @@ python -m src.run --stage clean --doc-id AAPL_10K_2022Q3_2022-10-28   # one stag
 python -m src.run --stage all --force                    # ignore "already current", redo
 python -m src.pipeline.clean                             # run a stage standalone
 python scripts/inspect_corpus.py                         # regenerate architecture/corpus_notes.md
-python -m pytest                                         # 82 tests
+python -m pytest                                         # 209 tests
 ```
 
 ## Observability
@@ -110,9 +161,10 @@ chunking mixed sections, or metadata is wrong — you inspect the artifact and k
 - **Deterministic except generation.** Cleaning, metadata, section detection, chunking, retrieval,
   and citations are plain code. An LLM is used **only** for the final answer (Phase 2, one call).
 - **Chunking = Section-Aware Hierarchical Chunking.** Sections are parents; chunks are children split
-  **within** each section with a recursive boundary-preserving splitter. Size **3000 chars / 300
-  overlap** — a **dataset-driven** choice: the filings have almost no blank-line paragraphs (median 1
-  per filing), so paragraph chunking isn't viable; see `architecture/corpus_notes.md`.
+  **within** each section with a recursive boundary-preserving splitter. Size is a **MAX cap** (3000
+  chars / 300 overlap), not a fixed target — short sections stay whole; ~98% of chunks land below the
+  cap. Char-based (not tokens): the filings have almost no blank-line paragraphs (median 1 per
+  filing), so paragraph chunking isn't viable; see `architecture/corpus_notes.md`.
 - **Metadata: header wins over filename.** Fields come from the filing header; the filename backfills
   `fiscal_period` when absent (`Report Period`/`Quarter` are present on only ~78% of filings). `form`
   is normalized to exactly `10-K` / `10-Q`. Never uses an LLM.
@@ -132,12 +184,13 @@ chunking mixed sections, or metadata is wrong — you inspect the artifact and k
 | Deliverable | Where |
 |---|---|
 | README with setup/run | this file |
-| Indexing & retrieval code | `src/pipeline/`, `src/run.py`, `scripts/build_index.py` (retrieval: Phase 2) |
-| Prompt iteration log | `prompt_iterations/CHANGELOG.md` (Phase 2) |
-| Final prompt template | `src/generation/prompt.py` (Phase 2) |
-| Front-end | `frontend/app.py` (Phase 2) |
+| Indexing code | `src/pipeline/`, `src/run.py`, `scripts/build_index.py` |
+| Retrieval code | `src/retrieval/` (validate → … → RRF → rerank → guardrails → evidence) |
+| Final prompt template | `src/retrieval/prompt_builder.py` (versioned) |
+| Single-call generation | `src/generation/generate.py` |
+| Front-end | `src/frontend/app.py` (Streamlit) · `src/api/main.py` (FastAPI) |
 | Example request | `evals/case-01-.../prompt.md` |
-| Quality evaluation notes | `evaluation/` + `src/inspect.py` |
+| Quality evaluation | `src/eval/` (metrics + golden set) · `src/inspect.py` |
 
 ## Secrets
 

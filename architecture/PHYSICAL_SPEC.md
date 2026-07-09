@@ -1,8 +1,9 @@
 # Physical Implementation Specification
 
 The concrete "how" — exact modules, data models, config, storage schema, algorithms (with
-formulae), policies, and logging. Companion to `HLD.md` (logical) and `ARCHITECTURE.md` (business).
-Items marked **(Phase 2)** are specified here but not yet built.
+formulae), policies, and logging. Companion to `HLD.md` (logical), `ARCHITECTURE.md` (business), and
+`RETRIEVAL_DESIGN.md` (Phase 2 behavioral/operational TDS). Both phases are **built and tested**; the
+only deferred steps are the real embed/store run and a live Claude call (need keys/compute).
 
 ## 1. Project structure
 
@@ -10,35 +11,48 @@ Items marked **(Phase 2)** are specified here but not yet built.
 src/
   config.py            # typed settings (pydantic-settings)
   schemas.py           # data models (see §2)
+  reference.py         # curated data: GICS sectors, SEC section names, company->ticker dict
   observability.py     # persist/load artifacts, per-stage error isolation (run_docs)
-  run.py               # orchestrator CLI
+  run.py               # ingestion orchestrator CLI
   inspect.py           # stage inspection report
   pipeline/            # offline stages, one module per stage
     ingest.py clean.py metadata.py sections.py chunk.py enrich.py embed.py store.py
-  retrieval/           # (Phase 2) parse.py · search.py · fuse.py · context.py
-  generation/          # (Phase 2) prompt.py · generate.py
+  retrieval/           # online: query_validator · query_classifier · metadata_parser ·
+                       #   metadata_filter · retrieval_planner · vector_retriever · bm25_retriever ·
+                       #   hybrid_fusion · reranker · deduplicator · evidence_builder · guardrails ·
+                       #   prompt_builder · response_parser · citation_mapper · query_log ·
+                       #   retrieval_pipeline (orchestrator)
+  generation/          # generate.py — the single grounded Claude call
+  api/                 # main.py — FastAPI (POST /query, GET /health)
+  frontend/            # app.py — Streamlit debug UI
+  eval/                # metrics.py · run_eval.py · eval_set.jsonl (golden set)
 scripts/               # inspect_corpus.py · build_index.py
 data/                  # raw cleaned metadata sections chunks embeddings vectorstore logs  (git-ignored)
-frontend/              # (Phase 2) app.py (Streamlit, normal + debug mode)
-evaluation/            # (Phase 2) eval_set.jsonl + metrics
 ```
 
-> Concern-oriented naming maps 1:1 to the pipeline; `pipeline/` groups the ingest stages, `retrieval/`
-> and `generation/` hold Phase 2. (A finer split into `normalization/ metadata/ sections/ …` is a
-> possible future refactor — see DESIGN_AUDIT #20.)
+> Concern-oriented naming maps 1:1 to the pipeline; `pipeline/` groups the offline stages,
+> `retrieval/` + `generation/` the online flow, `api/` + `frontend/` the serving layer. (Flat layout
+> kept per ADR/DESIGN_AUDIT B11 — a finer split is a possible future refactor.)
 
 ## 2. Data models (`src/schemas.py`)
 
 | Model | Status | Fields |
 |---|---|---|
-| `DocMetadata` | ✅ | company, ticker, form, filing_date, source_file, report_period, fiscal_period, year, quarter, cik, source_url |
-| `SectionSpan` | ✅ | section_name, item, start, end |
-| `Chunk` (⊃ DocMetadata) | ✅ | id, doc_id, chunk_index, section, section_index, section_chunk_index, text, embed_text |
+| `DocMetadata` | ✅ | company, ticker, form, filing_date, source_file, report_period, fiscal_period, year, quarter, cik, source_url, **document_id, source, industry** |
+| `SectionSpan` | ✅ | section_name, item, **part**, start, end |
+| `Chunk` (⊃ DocMetadata) | ✅ | id, doc_id, chunk_index, section, section_index, section_chunk_index, text, embed_text, **content_hash** |
+| `Document` | ✅ | doc_id, filename, sha256, size, status — corpus catalog for incremental indexing |
+| `EmbeddingRecord` | ✅ | chunk_id, embedding, metadata (typed) |
 | `Citation` | ✅ | tag, ticker, company, form, fiscal_period, section, source_url |
 | `RetrievalResult` | ✅ | chunk, score |
 | `Answer` | ✅ | answer, sources[Citation], retrieved[RetrievalResult], usage |
-| `EmbeddingRecord` | ⚠️ dict today | {chunk_id, embedding, metadata} — planned to become a typed model |
-| `Document` | ⚠️ implicit | doc_id + DocMetadata (+ planned sha256) — not a standalone class yet |
+| `QueryAnalysis` | ✅ | query, intents[], companies[], years[], quarters[], forms[], section_intent[] |
+| `HardFilter` | ✅ | tickers[], years[], quarters[], forms[] · `.where` (Chroma) · `.matches` (BM25) |
+| `RetrievalPlan` | ✅ | mode, per_entity_k, section_boosts[], pool_size |
+| `Evidence` | ✅ | evidence_id ([E#]), chunk, score, tag |
+| `GuardrailResult` | ✅ | ok, action, reason, confidence |
+| `PromptBundle` | ✅ | system, user, prompt_version |
+| `AnswerBody` | ✅ | executive_summary, comparison, supporting_evidence, citations[], confidence, limitations |
 
 All chunk metadata is Chroma-safe (str/int/float/bool, no None, no lists). `extra="forbid"` everywhere.
 
@@ -58,18 +72,23 @@ is intentionally omitted for deterministic artifacts.)*
 
 **BM25** `data/vectorstore/bm25.json`: `{ids, tokens, metadatas}` (tokenizer: lowercase `[a-z0-9]+`).
 
-## 5. Retrieval pipeline (Phase 2)
+## 5. Retrieval pipeline (built — `src/retrieval/retrieval_pipeline.py`)
 
 ```
 question
-  → parse metadata filters (deterministic: tickers, years, quarter, form)     [HARD filters]
+  → validate (empty/short/long/encoding)
+  → classify intent + extract metadata (tickers, years, quarter, form, section)  [deterministic]
+  → build HARD filter (company/year/quarter/form)   [exact, pre-ranking]
+  → plan (per-entity / per-period / global + section boosts)
   → BM25 search (top 20, within filter)         ┐
-  → vector search (top 20, within filter)        ├─ both are SOFT semantic/lexical ranking
-  → Reciprocal Rank Fusion (RRF)                ┘
-  → deduplicate (by doc_id + section + chunk_index)
-  → take top 8
-  → context builder (order best-first, tag citations, fit token budget)
-  → single Claude call
+  → vector search (top 20, within filter)        ├─ SOFT ranking; each degrades to the other (§9 matrix)
+  → Reciprocal Rank Fusion (RRF, k=60)          ┘
+  → hydrate BM25-only texts · cross-encoder rerank (top 8, identity fallback)
+  → deduplicate (content_hash + per-section cap)
+  → evidence [E1..] (tag citations, fit token budget)
+  → guardrails (coverage / diversity / min-similarity / cite-or-refuse)
+  → single Claude call    ← made ONLY if guardrails pass (refusals = zero calls)
+  → parse structured answer + resolve citations + log
 ```
 
 **Hard filters vs soft retrieval.** *Hard filters* (company/year/quarter/form) are exact metadata
@@ -116,12 +135,13 @@ Exactly **one** `client.messages.create()` produces the answer.
 
 ## 7. Output schema (Phase 2)
 
-The single call returns markdown with these sections (mapped to the `Answer` model):
+The single call returns a structured `AnswerBody` rendered to markdown (mapped to the `Answer` model):
 1. **Executive Summary** — 1–3 sentence takeaway.
 2. **Comparison** — per-company / per-period table or parallel bullets (for comparison questions).
-3. **Supporting Evidence** — the specific facts/figures, each with an inline citation.
-4. **Citations** — the list of sources (see §8), linking `source_url`.
-5. **Confidence** — High / Medium / Low (see §9).
+3. **Supporting Evidence** — the specific facts/figures, each with an inline `[E#]` citation.
+4. **Citations** — resolved sources (see §8), linking `source_url`.
+5. **Confidence** — High / Medium / Low — **deterministic** (§9), overrides any model-stated value.
+6. **Limitations** — gaps/caveats (e.g. a requested year with no evidence).
 
 ## 8. Citation format
 
@@ -154,12 +174,13 @@ the eval set). A refusal ("Information unavailable") always reports **Low**.
 | Log | Content | Status |
 |---|---|---|
 | **Pipeline logs** | per-stage `<stage>_failures.json` (dead-lettered docs) | ✅ |
-| **Query logs** (Phase 2) | per query: question, filters, retrieved chunk ids, scores, prompt, response, latency, tokens, cost, timestamp | ❌ |
+| **Query logs** | `data/logs/queries.jsonl`: question, intents, filter, bm25/vector/rrf/reranked/evidence ids, prompt_version, guardrail, latency, tokens, cost | ✅ |
 | **Application logs** | operational stdout/stderr (run/inspect summaries) | ⚠️ (print-based) |
-| **Evaluation logs** (Phase 2) | per eval case: expected vs retrieved, metric values | ❌ |
+| **Evaluation logs** | `data/logs/eval_report.json`: per-case metrics + summary (recall/precision@k, MRR, NDCG, citation coverage) | ✅ |
 
-## 12. Cost & latency tracking (Phase 2)
+## 12. Cost & latency tracking (built)
 
-Per query, record embedding tokens (query), generation input/output tokens, `$` cost (from model
-pricing), and wall-clock latency into the `Answer.usage` object and the query log. Surfaced in the
-debug UI.
+Per query, `src/retrieval/query_log.py` records generation input/output tokens, `$` cost (Claude
+Opus 4.8 pricing $5/$25 per 1M in/out), and wall-clock latency into the query log; surfaced in the
+debug UI. Live token capture from the structured call is best-effort (populated once real Claude
+calls run).

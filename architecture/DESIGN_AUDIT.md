@@ -214,17 +214,28 @@ removes only the leading machine blob + isolated tag lines. Verified: 0/246 file
 
 ---
 
-# REMAINING PENDING — only Phase 2 + real runs
+# Part E — Phase 2: BUILT (commits P1–P22)
 
-### C. Phase 2 build (code — separate plan)
-12. **Retrieval**: `parse` (metadata filters) → `search` (BM25 top20 + vector top20) → `fuse` (RRF) →
-    dedup → top8 → `context` builder (#7/#8/#21/#22).
-13. **Single Claude call** + `generation/prompt.py` (grounded, cite-or-refuse) (#12).
-14. **Confidence score** (deterministic, mean top-k similarity) (#15).
-15. **Per-query logging** + **evaluation dataset & metrics code** (recall@k, MRR, faithfulness) (#16/#17).
-16. **Debug UI** (Streamlit) + `frontend/app.py`; observability folders `retrieval/ prompt/ responses/` (#18).
-17. **Cost & latency tracking** in `Answer.usage` + query log (#24).
+The online retrieval + generation layer is implemented and tested (209 tests). See
+`RETRIEVAL_DESIGN.md` (TDS) and `ADR.md`. Everything before the single Claude call is deterministic
+or local ML; refusals make zero LLM calls.
 
-### D. Real runs (need key / compute — not code)
+### C. Phase 2 build — ✅ DONE
+12. **Retrieval** — validate → classify → extract → hard filter → plan → hybrid (vector+BM25) → RRF
+    (k=60) → hydrate → rerank → dedup → evidence, in `src/retrieval/`. (P3–P12, P17)
+13. **Single Claude call** — `src/generation/generate.py` (LangChain ChatAnthropic, structured
+    output, one request); prompt builder cite-or-refuse + versioned. (P14, P15)
+14. **Confidence score** — deterministic similarity bands in `guardrails.py`, overrides the model's. (P13)
+15. **Per-query logging** + **eval harness** — `query_log.py` (JSONL) + `src/eval/` (metrics + golden
+    set: precision@k, recall@k, MRR, NDCG, citation coverage). (P18, P21)
+16. **Debug UI** (Streamlit) `src/frontend/app.py` + **FastAPI** `src/api/main.py`. (P19, P20)
+17. **Cost & latency tracking** — `query_log.py` (Claude pricing, wall-clock latency). (P18)
+
+Two spec deltas, both intentional: query logs are one JSONL (`data/logs/queries.jsonl`) rather than
+per-file; the cross-encoder reranker ships as an optional dep with an identity fallback.
+
+### D. Real runs — still deferred (need keys / compute, not code)
 18. **Real embed run** (`OPENAI_API_KEY`, ~32K chunks) → populate `data/embeddings/`.
 19. **Real Chroma + BM25 build** (`python -m src.pipeline.store`) after #18.
+20. **Live eval** (`python -m src.eval.run_eval`) + live Claude answers (`ANTHROPIC_API_KEY`).
+21. **Cross-encoder reranker** — `pip install sentence-transformers` to activate (else identity fallback).

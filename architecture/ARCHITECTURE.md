@@ -2,14 +2,20 @@
 
 PE-RAG is specified at three levels so every decision is explicit and defensible.
 
+Both phases are **built and tested**: offline ingestion/indexing (Stages 1–8) and the online
+retrieval + single-call generation layer (validation → understanding → hybrid retrieval → RRF →
+rerank → guardrails → one Claude call → cited answer), plus FastAPI, Streamlit, and an eval harness.
+
 | Level | Question it answers | Where |
 |---|---|---|
 | **Business** | *Why* does each component exist? What problem does it solve? | this file (below) |
 | **Logical** | *What* is the pipeline, data flow, and each module's responsibility? | [`HLD.md`](HLD.md) + [`CHUNKING_STRATEGY.md`](CHUNKING_STRATEGY.md) |
 | **Physical** | *How* exactly — classes, config, schema, algorithms, policies, logging? | [`PHYSICAL_SPEC.md`](PHYSICAL_SPEC.md) |
+| **Behavioral / Operational** | Contracts, sequence, decision trees, failure matrix, budgets (Phase 2) | [`RETRIEVAL_DESIGN.md`](RETRIEVAL_DESIGN.md) |
 
-Supporting: [`ASSUMPTIONS.md`](ASSUMPTIONS.md) · [`corpus_notes.md`](corpus_notes.md) (dataset findings)
-· [`DESIGN_AUDIT.md`](DESIGN_AUDIT.md) (design vs implementation status).
+Supporting: [`ADR.md`](ADR.md) (decision records) · [`ASSUMPTIONS.md`](ASSUMPTIONS.md) ·
+[`corpus_notes.md`](corpus_notes.md) (dataset findings) · [`DESIGN_AUDIT.md`](DESIGN_AUDIT.md)
+(design vs implementation status).
 
 ---
 
