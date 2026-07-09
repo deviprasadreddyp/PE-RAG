@@ -45,6 +45,7 @@ class VectorStore(Protocol):
     def upsert(self, ids, embeddings, documents, metadatas) -> None: ...
     def count(self) -> int: ...
     def query(self, embedding, k: int = 8, where: dict | None = None) -> list[dict]: ...
+    def get(self, ids) -> list[dict]: ...
 
 
 class ChromaVectorStore:
@@ -78,6 +79,14 @@ class ChromaVectorStore:
             {"id": res["ids"][0][i], "document": res["documents"][0][i],
              "metadata": res["metadatas"][0][i], "distance": res["distances"][0][i]}
             for i in range(len(res["ids"][0]))
+        ]
+
+    def get(self, ids) -> list[dict]:
+        """Fetch documents + metadata by id (used to hydrate BM25-only candidates)."""
+        res = self._col.get(ids=list(ids), include=["documents", "metadatas"])
+        return [
+            {"id": res["ids"][i], "document": res["documents"][i], "metadata": res["metadatas"][i]}
+            for i in range(len(res["ids"]))
         ]
 
 
