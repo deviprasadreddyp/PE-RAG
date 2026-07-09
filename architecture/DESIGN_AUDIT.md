@@ -7,10 +7,16 @@ Audit of the current codebase (commits through `docs: ingestion README`) against
 ❌ not implemented. **Decision column is "defer" everywhere — no changes made from this audit.**
 
 ## Headline
-- The **offline pipeline (Stages 1–8) is built, tested (82 tests), observable, and documented** — but
-  it reflects the *earlier* "aggressive clean" decision, **not** the new controlled-normalization one.
-- The biggest gaps are **(1) the cleaning philosophy change**, **(2) a dedicated Stage 0 discovery
-  artifact**, and **(3) all of Phase 2** (retrieval, fusion, single LLM call, debug UI).
+> **Update (current):** Parts A–C below are the *original* audit (kept for the record). Bucket **A**
+> (cleaning philosophy) and **all** of Bucket **B** (items 2–11) have since been implemented and
+> re-run — see **Part D** at the bottom. The only remaining gaps are **Phase 2** and the **real
+> embed/store runs**. 98 tests pass.
+
+- The **offline pipeline (Stages 1–8) is built, tested, observable, and documented**, now on the
+  **controlled-normalization** design with typed records, incremental indexing, canonical sections +
+  Part tree, and semantic-hierarchical max-cap chunking.
+- The remaining gaps are **all of Phase 2** (retrieval, fusion, single LLM call, debug UI) and the
+  **real embed/store runs** (need `OPENAI_API_KEY` + compute).
 
 ---
 
@@ -166,26 +172,49 @@ Much of Part B is really *documentation explicitness*, which a Physical Spec wou
 
 ---
 
-# REMAINING PENDING — full list (nothing else is done)
+# Part D — Bucket A + B: RESOLVED (supersedes the pending lists above)
 
-### A. The open design decision (highest impact)
-1. **Cleaning philosophy** — switch Stage 2 from aggressive blob-cut to **controlled normalization**,
-   and split into **Normalization** (cosmetic/reversible) + **Structural Parsing**. Would re-run
-   clean → sections → chunk. *(DESIGN_AUDIT Part A)*
+Bucket **A** (cleaning philosophy) and **all** of Bucket **B** (items 2–11) are now implemented,
+tested, and re-run on the 246-file corpus. 98 tests pass.
 
-### B. Small hardening of the built pipeline (code)
-2. Doc-level **SHA-256 + `data/raw_index.json`** for incremental indexing (#3 / Part A #2).
-3. **Controlled-normalization sub-steps** — explicit CRLF→LF, tabs→spaces, multi-space collapse
-   (table-safe) (Part A #3).
-4. **Metadata fields** — add `industry` / `source` / `document_id`; decide `form` vs `filing_type`;
-   company/CIK source (Part A #4, Part B #—).
-5. **Canonical section-name map + explicit section tree** (#1).
-6. **Chunk sizing** — keep 3000 chars/300 or move to ~1000 **tokens**/150 (token length fn) (Part A #5).
-7. **Enrichment header** — add **Ticker & Quarter** (Part A #6, Part B #—).
-8. **Typed `Document` and `EmbeddingRecord`** models (#19).
-9. **Chroma record `hash`** field (#11) — (`created_at` intentionally omitted for determinism).
-10. **Collection name** — `sec_filings` vs model-namespaced (Part A #7).
-11. **Project-structure refactor** into per-concern folders (documented; refactor not done) (#20).
+### A. Cleaning philosophy — ✅ DONE (commit `68566fe`)
+Stage 2 is now **controlled normalization** (cosmetic, content-preserving), explicitly split from
+**Structural Parsing** (metadata/sections). CRLF→LF, tabs→spaces, prose multi-space collapse — with a
+`_is_tabular` guard so tables / aligned columns / signatures keep their spacing. Controlled XBRL trim
+removes only the leading machine blob + isolated tag lines. Verified: 0/246 files contain `us-gaap:`;
+`FORM 10-K`, pipe tables, and `$` figures preserved.
+
+### B. Small hardening — ✅ DONE
+2. **SHA-256 + `data/raw_index.json`** (incremental indexing) — `run_ingest` fingerprints every filing
+   into a typed `Document` catalog and returns `report["changed"]` (new/modified docs). No timestamps
+   (determinism preserved). (commit `c93b1c1`)
+3. **Controlled-normalization sub-steps** — explicit CRLF→LF, tabs→spaces, table-safe multi-space
+   collapse. (part of A, commit `68566fe`)
+4. **Metadata fields** — added `document_id`, `source` (from header), `industry` (curated GICS table
+   in `src/reference.py`, `""` for unknown tickers). **Decision: keep `form`** (not `filing_type`) —
+   used across filters/citations/tests; header "Filing Type" maps onto it. (commit `777b5c8`)
+5. **Canonical section-name map + section tree** — 10-K sections normalized to standard SEC names +
+   `SectionSpan.part` (Part I–IV) from the fixed structure; 10-Q keeps detected titles (Part-ambiguous,
+   never guessed). Grouping by `part` reconstructs the tree. (commit `42de3e4`)
+6. **Chunk sizing** — **Decision: keep char-based, reframed as a MAX cap** (semantic-hierarchical, not
+   fixed, and NOT switched to token sizing). Field renamed `chunk_size`→`chunk_max_chars`; docs updated;
+   verified ~98% of a filing's chunks land below the cap. (commit `b241f4c`)
+7. **Enrichment header** — now includes **Ticker & Quarter** (`Quarter: FY` for annual). (commit `b241f4c`)
+8. **Typed `Document` and `EmbeddingRecord`** models — `embed.py` persists `list[EmbeddingRecord]`. (commit `c93b1c1`)
+9. **Chroma record `hash`** — `Chunk.content_hash = sha256(text)` flows to Chroma metadata
+   (`created_at` intentionally omitted for determinism). (commit `b241f4c`)
+10. **Collection name** — **Decision: model-namespaced** (`sec_filings__text-embedding-3-large`, via
+    `settings.collection_name`). Rationale: a model change ⇒ a fresh index, preventing dimension/space
+    mismatches between vectors from different models. Already implemented; decision recorded.
+11. **Project structure** — **Decision: keep the flat `src/` + `src/pipeline/` layout for the MVP;
+    do NOT refactor into per-concern folders now.** Rationale: the pipeline is already a clean linear
+    sequence of one module per stage; a package rename mid-build adds churn and import risk with no
+    functional benefit. Phase 2 will add `retrieval`/`generation`/`frontend` modules under `src/` when
+    that code exists (natural per-concern separation without a disruptive refactor).
+
+---
+
+# REMAINING PENDING — only Phase 2 + real runs
 
 ### C. Phase 2 build (code — separate plan)
 12. **Retrieval**: `parse` (metadata filters) → `search` (BM25 top20 + vector top20) → `fuse` (RRF) →
