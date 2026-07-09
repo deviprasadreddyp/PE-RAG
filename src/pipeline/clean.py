@@ -1,12 +1,19 @@
-"""Stage 2 — cleaning.
+"""Stage 2 — controlled normalization (NOT structural parsing).
 
-Load ``data/raw/<doc_id>.txt``, drop the header block and the leading XBRL/us-gaap
-blob (anchoring on the first prose marker), drop residual XBRL tag lines, and
-collapse blank-line runs — while PRESERVING business text, section titles,
-numbers/units, and table rows (internal spacing is kept). Persist the cleaned
-prose to ``data/cleaned/<doc_id>.txt``. Deterministic; no LLM.
+Cosmetic, content-preserving normalization of a raw filing. It:
+  - normalizes newlines (CRLF -> LF) and whitespace (tabs -> spaces; collapses
+    multi-space in prose only — tables / aligned columns are preserved),
+  - collapses excessive blank-line runs,
+  - performs a *controlled* XBRL trim that removes ONLY the leading machine-data
+    prefix (the blob shares a line with the cover page, so we cut at the first
+    prose marker) plus residual isolated XBRL tag lines.
 
-Run standalone:  python -m src.pipeline.clean   (cleans everything in data/raw/)
+It never deletes business text, tables, numbers, or headings. Structural
+understanding (metadata, sections) is a *separate* concern handled in Stages 3-4
+— this is the Normalization vs Structural Parsing split. Persist to
+``data/cleaned/<doc_id>.txt``. Deterministic; no LLM.
+
+Run standalone:  python -m src.pipeline.clean
 """
 
 from __future__ import annotations
@@ -28,15 +35,27 @@ def split_header_body(raw: str) -> tuple[str, str]:
     return (parts[0], parts[1]) if len(parts) == 2 else ("", raw)
 
 
+def _is_tabular(line: str) -> bool:
+    """Preserve spacing on tables/signatures/aligned columns."""
+    return "|" in line or "/s/" in line or len(re.findall(r"\S {2,}\S", line)) >= 2
+
+
+def _normalize_line(line: str) -> str:
+    line = line.replace("\t", " ").rstrip()          # tabs -> space; drop trailing spaces
+    if _is_tabular(line):
+        return line                                  # keep table / column alignment intact
+    return re.sub(r" {2,}", " ", line)               # collapse multi-space in prose only
+
+
 def clean(raw: str) -> str:
-    """Raw filing text -> cleaned prose (deterministic)."""
+    """Raw filing text -> normalized prose (controlled; content-preserving)."""
     _, body = split_header_body(raw)
+    body = body.replace("\r\n", "\n").replace("\r", "\n")            # CRLF -> LF
     m = PROSE.search(body)
-    prose = body[m.start():] if m else body                       # drop the leading XBRL blob
-    prose = "\n".join(ln for ln in prose.split("\n") if not XBRL_LINE.match(ln))  # residual tags
-    prose = re.sub(r"[ \t]+\n", "\n", prose)                       # strip trailing spaces
-    prose = re.sub(r"\n{3,}", "\n\n", prose)                       # collapse blank-line runs
-    return prose.strip() + "\n"
+    body = body[m.start():] if m else body                          # controlled boundary trim (prefix only)
+    lines = [_normalize_line(ln) for ln in body.split("\n") if not XBRL_LINE.match(ln)]
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines))              # collapse blank-line runs
+    return text.strip() + "\n"
 
 
 def run_clean(doc_id: str, *, base=None) -> dict:

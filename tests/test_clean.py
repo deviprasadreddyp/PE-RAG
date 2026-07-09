@@ -11,8 +11,9 @@ RAW = (
     + "Item 1A. Risk Factors\n"
     + ("The Company faces supply chain and competitive risks. " * 40) + "\n"
     + "Total net sales were $391,035 million in fiscal 2022.\n"
-    + "Segment            Revenue\n"
-    + "Americas           169,658\n"
+    + "Net income  rose sharply.\n"                        # prose w/ multi-space -> collapses
+    + "Segment |  | Revenue |  | Change\n"                 # pipe table -> preserved
+    + "Americas |  | 169,658 |  | +8%\n"
     + "0000320193us-gaap:AccumulatedOtherComprehensiveIncomeMember2021-09-25\n"  # residual tag
 )
 
@@ -27,7 +28,8 @@ def test_clean_strips_xbrl_and_preserves_business():
     assert "us-gaap:" not in c                            # leading blob + residual removed
     assert "$391,035 million" in c                        # numbers/units preserved verbatim
     assert "Item 1A. Risk Factors" in c                   # section title preserved
-    assert "Americas           169,658" in c              # table alignment (internal spaces) kept
+    assert "Americas |  | 169,658 |  | +8%" in c          # pipe table preserved (table-safe)
+    assert "Net income rose sharply." in c                # prose multi-space collapsed
     body = split_header_body(RAW)[1]
     assert len(c) < len(RAW)                              # smaller than raw
     assert len(c) > 0.5 * len(body)                       # but kept the bulk (prose dominates)
