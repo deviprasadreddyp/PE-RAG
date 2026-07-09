@@ -18,6 +18,11 @@ pydantic>=2.7,<3
 pydantic-settings>=2.3,<3
 python-dotenv>=1.0,<2
 
+# --- Reranking (P10) — OPTIONAL local cross-encoder; lazy-imported with a graceful
+#     fallback to RRF order if absent (may lack a wheel on the newest Python). Install with:
+#         pip install "sentence-transformers>=3,<6"
+# sentence-transformers>=3.0,<6
+
 # --- Serving / UI (Phase 2) ---
 fastapi>=0.110,<1
 uvicorn[standard]>=0.29,<1
