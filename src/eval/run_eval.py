@@ -80,19 +80,47 @@ def aggregate(rows: list[dict]) -> dict:
     return out
 
 
-def run_eval(*, path=None, out=None, k=None, **components) -> dict:
-    """Run the pipeline over the golden set and return {cases, summary}; writes a JSON report."""
-    from src.retrieval.retrieval_pipeline import answer_query  # local import (needs components)
+_RETRIEVAL_KEYS = ("store", "index", "embedder", "reranker")
 
+
+def assemble_report(rows: list[dict], *, ab: dict | None = None, ragas: dict | None = None) -> dict:
+    """Combine per-case generation-path rows + optional A/B + RAGAS into one report (pure)."""
+    return {"retrieval": {"cases": rows, "summary": aggregate(rows)}, "ab": ab, "ragas": ragas}
+
+
+def run_eval(*, path=None, out_dir=None, k=None, run_ab=True, run_ragas_eval=False,
+             ragas_evaluator=None, **components) -> dict:
+    """Full evaluation: per-case generation path + retrieval A/B (+ optional RAGAS) → JSON+HTML report.
+
+    Compares against the previous run and records regressions. Needs the built index + keys (deferred,
+    like the embed/store runs); the report-building pieces are pure and unit-tested.
+    """
+    from src.retrieval.retrieval_pipeline import answer_query
+    from src.eval import ragas_runner, report as report_mod, retrieval_eval, tracing
+
+    tracing.enable_langsmith()                                   # trace the answer calls if a key is set
     cases = load_eval_set(path)
-    rows = []
+    ret_components = {k2: v for k2, v in components.items() if k2 in _RETRIEVAL_KEYS}
+
+    rows, ragas_rows = [], []
     for case in cases:
         result = answer_query(case["question"], **components)
-        rows.append({"question": case["question"], **evaluate_case(result, case, k=k)})
-    report = {"cases": rows, "summary": aggregate(rows)}
-    out_path = Path(out) if out is not None else settings.data_path / "logs" / "eval_report.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        rows.append({"id": case.get("id"), "question": case["question"], **evaluate_case(result, case, k=k)})
+        if not case.get("expect_refusal") and not result.refused:
+            ragas_rows.append({"question": case["question"], "answer": result.answer.answer,
+                               "contexts": [e.chunk.text for e in (result.evidence or [])]})
+
+    ab = retrieval_eval.ab_eval(cases, k=k, **ret_components) if run_ab else None
+    ragas = (ragas_runner.run_ragas(ragas_runner.build_samples(ragas_rows), evaluator=ragas_evaluator)
+             if run_ragas_eval and ragas_rows else None)
+
+    report = assemble_report(rows, ab=ab, ragas=ragas)
+    out_dir = Path(out_dir) if out_dir is not None else settings.data_path / "logs"
+    previous = report_mod.load_previous(out_dir)
+    if previous:
+        report["regression"] = report_mod.compare_to_previous(
+            report_mod.flat_summary(report), report_mod.flat_summary(previous))
+    report["paths"] = report_mod.write_reports(report, out_dir)
     return report
 
 
@@ -101,6 +129,9 @@ if __name__ == "__main__":
         r = run_eval()
     except (ImportError, RuntimeError, FileNotFoundError) as exc:
         print(f"Eval: cannot run yet ({type(exc).__name__}: {exc}). "
-              "Build the index (embed + store) and set keys first.")
+              "Build the index (embed + store) and set OPENROUTER_API_KEY first.")
     else:
-        print("Eval summary:", json.dumps(r["summary"], indent=2))
+        print("Retrieval summary:", json.dumps(r["retrieval"]["summary"], indent=2))
+        if r.get("ab"):
+            print("A/B summary:", json.dumps(r["ab"]["summary"], indent=2))
+        print("Report written to:", r["paths"]["html"])
