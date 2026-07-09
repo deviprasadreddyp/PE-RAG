@@ -44,16 +44,23 @@ class Settings(BaseSettings):
     # packs boundary-preserving pieces UP TO a MAXIMUM size — this is a ceiling, NOT a fixed
     # target: short sections stay whole (one small chunk); long ones split only at real
     # boundaries. Char-based (~750 tokens; filings have ~no blank-line paragraphs). Tuned by eval.
-    chunk_max_chars: int = Field(3000, gt=0)     # per-chunk MAX cap, not a fixed size
-    chunk_overlap: int = Field(300, ge=0)
+    chunk_max_chars: int = Field(3000, ge=600, le=6000)     # per-chunk MAX cap, not a fixed size
+    chunk_overlap: int = Field(300, ge=0, le=1000)
 
-    # --- Retrieval (Phase 2) ---
-    top_k: int = Field(8, gt=0)
-    candidate_pool: int = Field(30, gt=0)
+    # --- Retrieval (Phase 2; see architecture/RETRIEVAL_DESIGN.md §7) ---
+    vector_top_k: int = Field(20, ge=5, le=100)          # dense recall pool before fusion
+    bm25_top_k: int = Field(20, ge=5, le=100)            # lexical recall pool before fusion
+    rrf_k: int = Field(60, ge=1, le=1000)                # Reciprocal Rank Fusion constant
+    candidate_pool: int = Field(30, ge=5, le=200)        # fused pool handed to the reranker
+    rerank_top_k: int = Field(8, ge=1, le=20)            # final evidence count into the prompt
+    rerank_model: str = "BAAI/bge-reranker-base"         # local cross-encoder ("-large" if latency allows)
+    min_similarity: float = Field(0.35, ge=0.0, le=1.0)  # below this a candidate is treated as non-evidence
+    max_query_chars: int = Field(1000, ge=50, le=4000)   # reject pathological queries
+    min_query_chars: int = Field(3, ge=1, le=50)         # reject empty / one-char queries
 
     # --- Embedding request policy (explicit; not left to SDK defaults) ---
-    embed_batch_size: int = Field(100, gt=0)     # chunks per OpenAI embeddings request
-    embed_max_retries: int = Field(3, ge=0)      # retries w/ exponential backoff on 429/5xx
+    embed_batch_size: int = Field(100, ge=1, le=2048)    # chunks per OpenAI embeddings request
+    embed_max_retries: int = Field(3, ge=0, le=10)       # retries w/ exponential backoff on 429/5xx
 
     # --- Paths ---
     data_dir: str = "data"

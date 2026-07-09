@@ -4,7 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from src.schemas import (
-    Answer, Chunk, Citation, DocMetadata, Document, EmbeddingRecord,
+    Answer, AnswerBody, Chunk, Citation, DocMetadata, Document, EmbeddingRecord,
+    Evidence, GuardrailResult, HardFilter, PromptBundle, QueryAnalysis, RetrievalPlan,
     RetrievalResult, SectionSpan,
 )
 
@@ -85,3 +86,55 @@ def test_embedding_record_roundtrip():
     e = EmbeddingRecord(chunk_id="AAPL_10K_2024__RiskFactors_c00",
                         embedding=[0.1, -0.2, 0.3], metadata={"ticker": "AAPL", "year": 2024})
     assert EmbeddingRecord.model_validate_json(e.model_dump_json()) == e
+
+
+# --- Phase 2 contracts ---
+
+def test_query_analysis_defaults_and_roundtrip():
+    q = QueryAnalysis(query="Compare Apple and Tesla risk factors in 2024",
+                      intents=["Comparison", "Risk"], companies=["AAPL", "TSLA"],
+                      years=[2024], section_intent=["Risk Factors"])
+    assert q.quarters == [] and q.forms == []
+    assert QueryAnalysis.model_validate_json(q.model_dump_json()) == q
+
+
+def test_hard_filter_where_and_matches():
+    f = HardFilter(tickers=["AAPL", "TSLA"], years=[2024], forms=["10-K"])
+    assert not f.is_empty
+    # single-field filter is a bare clause; multi-field is $and
+    assert f.where == {"$and": [
+        {"ticker": {"$in": ["AAPL", "TSLA"]}},
+        {"year": {"$in": [2024]}},
+        {"form": {"$in": ["10-K"]}},
+    ]}
+    assert f.matches({"ticker": "AAPL", "year": 2024, "form": "10-K"})
+    assert not f.matches({"ticker": "MSFT", "year": 2024, "form": "10-K"})   # wrong ticker
+    assert not f.matches({"ticker": "AAPL", "year": 2023, "form": "10-K"})   # wrong year
+
+
+def test_hard_filter_empty_is_no_op():
+    f = HardFilter()
+    assert f.is_empty and f.where == {}
+    assert f.matches({"ticker": "ANY", "year": 1999, "form": "10-Q"})        # matches everything
+
+
+def test_hard_filter_single_field_is_bare_clause():
+    assert HardFilter(tickers=["AAPL"]).where == {"ticker": {"$in": ["AAPL"]}}
+
+
+def test_retrieval_plan_and_evidence_and_guardrail_roundtrip():
+    plan = RetrievalPlan(mode="per_entity", per_entity_k=4, section_boosts=["Risk Factors"])
+    assert RetrievalPlan.model_validate_json(plan.model_dump_json()) == plan
+    ev = Evidence(evidence_id="E1", chunk=_chunk(), score=0.91, tag="[AAPL 10-K FY2022 · Risk Factors]")
+    assert Evidence.model_validate_json(ev.model_dump_json()) == ev
+    g = GuardrailResult(ok=False, action="reject", reason="insufficient evidence", confidence="Low")
+    assert GuardrailResult.model_validate_json(g.model_dump_json()) == g
+
+
+def test_prompt_bundle_and_answer_body_roundtrip():
+    pb = PromptBundle(system="You are...", user="Question: ...", prompt_version="v1")
+    assert PromptBundle.model_validate_json(pb.model_dump_json()) == pb
+    ab = AnswerBody(executive_summary="Apple's revenue grew.", supporting_evidence="Net sales [E1].",
+                    citations=["E1"], confidence="High")
+    assert ab.comparison == "" and ab.limitations == ""
+    assert AnswerBody.model_validate_json(ab.model_dump_json()) == ab

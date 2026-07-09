@@ -46,7 +46,7 @@ All chunk metadata is Chroma-safe (str/int/float/bool, no None, no lists). `extr
 
 `openai_api_key`, `anthropic_api_key` (SecretStr) · `embedding_model=text-embedding-3-large` ·
 `generation_model=claude-opus-4-8` · `chunk_max_chars=3000` (per-chunk MAX cap), `chunk_overlap=300` (chars) ·
-`top_k=8`, `candidate_pool=30` · `embed_batch_size=100`, `embed_max_retries=3` ·
+`vector_top_k=20`, `bm25_top_k=20`, `rrf_k=60`, `candidate_pool=30`, `rerank_top_k=8`, `min_similarity=0.35` · `embed_batch_size=100`, `embed_max_retries=3` ·
 `data_dir`, `corpus_dir`, `chroma_dir`, `collection_base`. `collection_name` = `{base}__{model}`.
 
 ## 4. Storage schema

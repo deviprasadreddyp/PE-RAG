@@ -142,3 +142,108 @@ class EmbeddingRecord(_Base):
     chunk_id: str
     embedding: list[float]
     metadata: dict
+
+
+# --- Phase 2: retrieval & generation contracts (see architecture/RETRIEVAL_DESIGN.md §3) -----
+
+class QueryAnalysis(_Base):
+    """Deterministic understanding of a user query (Stages 1-3; no LLM)."""
+
+    query: str
+    intents: list[str] = Field(default_factory=list)         # multi-label: Comparison/Trend/Risk/...
+    companies: list[str] = Field(default_factory=list)       # tickers, e.g. ["AAPL", "TSLA"]
+    years: list[int] = Field(default_factory=list)
+    quarters: list[str] = Field(default_factory=list)        # e.g. ["Q3"]
+    forms: list[str] = Field(default_factory=list)           # "10-K" / "10-Q"
+    section_intent: list[str] = Field(default_factory=list)  # e.g. ["Risk Factors", "MD&A"]
+
+
+class HardFilter(_Base):
+    """Exact metadata constraints applied BEFORE ranking (Stage 4).
+
+    Renders to a Chroma ``where`` filter and provides a ``matches`` predicate for BM25
+    (which has no server-side filter). Empty lists mean "no constraint on that field".
+    """
+
+    tickers: list[str] = Field(default_factory=list)
+    years: list[int] = Field(default_factory=list)
+    quarters: list[str] = Field(default_factory=list)
+    forms: list[str] = Field(default_factory=list)
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.tickers or self.years or self.quarters or self.forms)
+
+    @property
+    def where(self) -> dict:
+        """Chroma-style where filter ($and of $in clauses); {} = no filter."""
+        clauses: list[dict] = []
+        if self.tickers:
+            clauses.append({"ticker": {"$in": self.tickers}})
+        if self.years:
+            clauses.append({"year": {"$in": self.years}})
+        if self.quarters:
+            clauses.append({"quarter": {"$in": self.quarters}})
+        if self.forms:
+            clauses.append({"form": {"$in": self.forms}})
+        if not clauses:
+            return {}
+        return clauses[0] if len(clauses) == 1 else {"$and": clauses}
+
+    def matches(self, md: dict) -> bool:
+        """Predicate for BM25 candidates: does this chunk's metadata satisfy the filter?"""
+        if self.tickers and md.get("ticker") not in self.tickers:
+            return False
+        if self.years and md.get("year") not in self.years:
+            return False
+        if self.quarters and md.get("quarter") not in self.quarters:
+            return False
+        if self.forms and md.get("form") not in self.forms:
+            return False
+        return True
+
+
+class RetrievalPlan(_Base):
+    """How to retrieve, derived from the query type (Stage 5)."""
+
+    mode: str = "global"                                     # "global" | "per_entity" | "per_period"
+    per_entity_k: int = 0                                    # candidates per entity when not global
+    section_boosts: list[str] = Field(default_factory=list)  # sections to boost, e.g. ["Risk Factors"]
+    pool_size: int = 0                                       # fused pool size (0 -> settings.candidate_pool)
+
+
+class Evidence(_Base):
+    """A retrieved chunk tagged for the prompt and citations (Stages 10-11)."""
+
+    evidence_id: str                                         # "E1", "E2", ...
+    chunk: Chunk
+    score: float = 0.0                                       # rerank (or fused) score
+    tag: str = ""                                            # e.g. "[AAPL 10-K FY2024 · Risk Factors]"
+
+
+class GuardrailResult(_Base):
+    """Deterministic gate before prompt/LLM (Stage 12)."""
+
+    ok: bool                                                 # True -> proceed to the single LLM call
+    action: str = "accept"                                  # "accept" | "warn" | "reject"
+    reason: str = ""                                        # why (for refusal / debug)
+    confidence: str = ""                                   # "High" | "Medium" | "Low" (similarity band)
+
+
+class PromptBundle(_Base):
+    """The assembled single-call prompt (Stage 13)."""
+
+    system: str
+    user: str
+    prompt_version: str
+
+
+class AnswerBody(_Base):
+    """Structured output of the single LLM call (Stage 14)."""
+
+    executive_summary: str = ""
+    comparison: str = ""                                    # markdown table/bullets ("" if not a comparison)
+    supporting_evidence: str = ""
+    citations: list[str] = Field(default_factory=list)      # evidence ids referenced, e.g. ["E1", "E3"]
+    confidence: str = ""                                    # High / Medium / Low
+    limitations: str = ""
