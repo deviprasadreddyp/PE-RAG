@@ -19,7 +19,10 @@ edgar_corpus/*.txt
 *.zip
 
 # --- Generated data, vector indexes & caches ---------------------------------
-data/
+# Ignore data/ contents but keep the (empty) stage folders, tracked via .gitkeep
+/data/**
+!/data/**/
+!/data/**/.gitkeep
 outputs/
 .cache/
 chroma/
@@ -113,7 +116,7 @@ ipython_config.py
 
 # --- Logs & temp -------------------------------------------------------------
 *.log
-logs/
+/logs/          # repo-root logs only; data/logs/ is handled by the data/ rules above
 *.tmp
 *.temp
 *.bak

@@ -1,0 +1,10 @@
+# PE-RAG — tooling config only (the project is run from source, not packaged).
+
+[tool.pytest.ini_options]
+pythonpath = ["."]        # so `import src...` resolves when running from the repo root
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
