@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Protocol
 
 from src.config import settings
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.schemas import Chunk
 
 
@@ -97,11 +97,12 @@ def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> di
 
 
 def run_all(*, embedder: Embedder | None = None, base=None) -> dict:
-    embedder = embedder or OpenAIEmbedder()                            # construct once, reuse
-    ids = list_artifacts("chunks", base=base)
-    reports = [run_embed(i, embedder=embedder, base=base) for i in ids]
-    return {"files": len(reports), "chunks": sum(r["count"] for r in reports),
-            "dim": reports[0]["dim"] if reports else 0}
+    embedder = embedder or OpenAIEmbedder()                            # construct once (fail fast on key/deps)
+    r = run_docs("embed", list_artifacts("chunks", base=base),
+                 lambda d: run_embed(d, embedder=embedder, base=base), base=base)
+    return {"files": r["ok"], "failed": r["failed"],
+            "chunks": sum(x["count"] for x in r["results"]),
+            "dim": r["results"][0]["dim"] if r["results"] else 0}
 
 
 if __name__ == "__main__":

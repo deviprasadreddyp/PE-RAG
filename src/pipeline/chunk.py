@@ -19,7 +19,7 @@ from __future__ import annotations
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import settings
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.schemas import Chunk, DocMetadata, SectionSpan
 
 SEPARATORS = ["\n\n", "\n", ". ", " ", ""]   # real boundaries first; "" hard-splits as last resort
@@ -75,18 +75,17 @@ def run_chunk(doc_id: str, *, base=None) -> list[Chunk]:
 
 
 def run_all(*, base=None) -> dict:
-    ids = list_artifacts("cleaned", ext="txt", base=base)
-    per = {i: run_chunk(i, base=base) for i in ids}
-    return {"files": len(per), "chunks": per}
+    return run_docs("chunk", list_artifacts("cleaned", "txt", base=base),
+                    lambda d: run_chunk(d, base=base), base=base)
 
 
 if __name__ == "__main__":
     r = run_all()
-    if not r["chunks"]:
+    if not r["results"] and not r["failed"]:
         print("Stage 5 chunk: no data/cleaned artifacts — run earlier stages first.")
     else:
-        allc = [c for cs in r["chunks"].values() for c in cs]
+        allc = [c for cs in r["results"] for c in cs]
         sizes = [len(c.text) for c in allc]
-        print(f"Stage 5 chunk: {len(allc):,} chunks from {r['files']} files "
-              f"(avg {len(allc) // r['files']}/file); "
-              f"chunk chars min {min(sizes)}, avg {sum(sizes) // len(sizes)}, max {max(sizes)}.")
+        print(f"Stage 5 chunk: {len(allc):,} chunks from {r['ok']} files ({r['failed']} failed); "
+              f"chunk chars min {min(sizes, default=0)}, "
+              f"avg {sum(sizes) // max(len(sizes), 1)}, max {max(sizes, default=0)}.")

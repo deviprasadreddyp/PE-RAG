@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.schemas import SectionSpan
 
 # "Item" (opt nbsp) number+letter, opt '.'/')' , spaces/nbsp/pipe, then an Upper-cased title.
@@ -99,17 +99,17 @@ def run_sections(doc_id: str, *, base=None) -> list[SectionSpan]:
 
 
 def run_all(*, base=None) -> dict:
-    ids = list_artifacts("cleaned", ext="txt", base=base)
-    per = {i: run_sections(i, base=base) for i in ids}
-    return {"files": len(per), "sections": per}
+    return run_docs("sections", list_artifacts("cleaned", "txt", base=base),
+                    lambda d: run_sections(d, base=base), base=base)
 
 
 if __name__ == "__main__":
     r = run_all()
-    if not r["sections"]:
+    if not r["results"] and not r["failed"]:
         print("Stage 4 sections: no data/cleaned artifacts — run `python -m src.pipeline.clean` first.")
     else:
-        counts = [len(v) for v in r["sections"].values()]
-        detected = sum(1 for v in r["sections"].values() if not (len(v) == 1 and v[0].item == ""))
-        print(f"Stage 4 sections: {r['files']} files; sections detected in {detected}/{r['files']}; "
-              f"avg {sum(counts) / len(counts):.1f} spans/file (max {max(counts)}).")
+        counts = [len(v) for v in r["results"]]
+        detected = sum(1 for v in r["results"] if not (len(v) == 1 and v[0].item == ""))
+        print(f"Stage 4 sections: {r['ok']} files ({r['failed']} failed); "
+              f"sections detected in {detected}/{r['ok']}; "
+              f"avg {sum(counts) / max(len(counts), 1):.1f} spans/file (max {max(counts, default=0)}).")

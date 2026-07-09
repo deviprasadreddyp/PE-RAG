@@ -7,6 +7,7 @@ from src.observability import (
     list_artifacts,
     load_artifact,
     persist_artifact,
+    run_docs,
     stage_count,
 )
 from src.schemas import Chunk, DocMetadata
@@ -74,6 +75,28 @@ def test_list_and_count(tmp_path):
 def test_missing_artifact_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_artifact("metadata", "missing", base=tmp_path)
+
+
+def test_list_artifacts_skips_underscore_files(tmp_path):
+    persist_artifact("raw", "AAPL", "x", ext="txt", base=tmp_path)
+    persist_artifact("raw", "_dead_letter", [{"x": 1}], base=tmp_path)   # json bookkeeping
+    persist_artifact("raw", "_notes", "y", ext="txt", base=tmp_path)
+    assert list_artifacts("raw", ext="txt", base=tmp_path) == ["AAPL"]
+
+
+def test_run_docs_isolates_per_doc_failures(tmp_path):
+    seen = []
+
+    def fn(d):
+        if d == "BAD":
+            raise ValueError("boom")
+        seen.append(d)
+        return d
+
+    rep = run_docs("clean", ["A", "BAD", "C"], fn, base=tmp_path)
+    assert rep["ok"] == 2 and rep["failed"] == 1 and seen == ["A", "C"]   # one bad doc didn't stop the rest
+    failures = load_artifact("logs", "clean_failures", base=tmp_path)
+    assert failures[0]["doc_id"] == "BAD" and "boom" in failures[0]["reason"]
 
 
 def test_unsafe_tokens_and_bad_ext_rejected(tmp_path):

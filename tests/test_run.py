@@ -2,7 +2,7 @@
 
 import json
 
-from src.observability import load_artifact, stage_count
+from src.observability import list_artifacts, load_artifact, persist_artifact, stage_count
 from src.pipeline.store import ChromaVectorStore
 from src.run import run
 
@@ -74,6 +74,18 @@ def test_single_stage_and_doc_id(tmp_path):
     rep = run(stage="clean", doc_id=doc, base=out)
     assert rep["clean"]["ran"] == 1
     assert stage_count("cleaned", "txt", base=out) == 1          # only the one doc cleaned
+
+
+def test_orchestrator_isolates_a_bad_doc(tmp_path):
+    corpus, out = _corpus(tmp_path), tmp_path / "out"
+    for s in ("ingest", "clean", "metadata", "sections", "chunk", "enrich"):
+        run(stage=s, corpus_dir=corpus, base=out)
+    ids = list_artifacts("chunks", base=out)
+    persist_artifact("chunks", ids[0], [{"id": "broken"}], base=out)   # invalid chunk -> embed fails
+    rep = run(stage="embed", base=out, embedder=FakeEmbedder())
+    assert rep["embed"]["failed"] == 1 and rep["embed"]["ran"] == 1     # one bad doc isolated, other embedded
+    failures = load_artifact("logs", "embed_failures", base=out)
+    assert failures and failures[0]["doc_id"] == ids[0]
 
 
 def test_unknown_stage_raises():

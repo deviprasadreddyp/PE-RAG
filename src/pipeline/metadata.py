@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.pipeline.clean import split_header_body
 from src.pipeline.ingest import FILENAME, SUFFIX
 from src.schemas import DocMetadata
@@ -90,16 +90,15 @@ def run_metadata(doc_id: str, *, base=None) -> DocMetadata:
 
 
 def run_all(*, base=None) -> dict:
-    ids = list_artifacts("raw", ext="txt", base=base)
-    metas = [run_metadata(i, base=base) for i in ids]
-    return {"extracted": len(metas), "metas": metas}
+    return run_docs("metadata", list_artifacts("raw", "txt", base=base),
+                    lambda d: run_metadata(d, base=base), base=base)
 
 
 if __name__ == "__main__":
     r = run_all()
-    if not r["metas"]:
+    if not r["results"] and not r["failed"]:
         print("Stage 3 metadata: no data/raw artifacts — run `python -m src.pipeline.ingest` first.")
     else:
-        with_period = sum(1 for m in r["metas"] if m.fiscal_period)
-        print(f"Stage 3 metadata: {r['extracted']} filings; "
-              f"fiscal_period present on {with_period}/{r['extracted']} after backfill.")
+        with_period = sum(1 for m in r["results"] if m.fiscal_period)
+        print(f"Stage 3 metadata: {r['ok']} extracted, {r['failed']} failed; "
+              f"fiscal_period present on {with_period}/{r['ok']} after backfill.")

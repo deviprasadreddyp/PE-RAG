@@ -87,9 +87,28 @@ def list_artifacts(stage: str, ext: str = "json", *, base: str | Path | None = N
     folder = _root(base) / _safe(stage, "stage")
     if not folder.is_dir():
         return []
-    return sorted(p.stem for p in folder.glob(f"*.{ext}"))
+    # skip "_"-prefixed bookkeeping files (e.g. _dead_letter, _failures)
+    return sorted(p.stem for p in folder.glob(f"*.{ext}") if not p.stem.startswith("_"))
 
 
 def stage_count(stage: str, ext: str = "json", *, base: str | Path | None = None) -> int:
     """How many artifacts ``stage`` has persisted."""
     return len(list_artifacts(stage, ext, base=base))
+
+
+def run_docs(stage_label: str, doc_ids, fn, *, base: str | Path | None = None) -> dict:
+    """Run ``fn(doc_id)`` over every doc, isolating failures.
+
+    A failure on one document is recorded and skipped — it never aborts the run for
+    the others. Failures are dead-lettered to ``data/logs/<stage_label>_failures.json``.
+    Returns ``{stage, ok, failed, failures, results}``.
+    """
+    results, failures = [], []
+    for d in doc_ids:
+        try:
+            results.append(fn(d))
+        except Exception as exc:  # noqa: BLE001 — deliberately isolate any per-doc failure
+            failures.append({"doc_id": d, "reason": f"{type(exc).__name__}: {exc}"})
+    persist_artifact("logs", f"{stage_label}_failures", failures, base=base)
+    return {"stage": stage_label, "ok": len(results), "failed": len(failures),
+            "failures": failures, "results": results}

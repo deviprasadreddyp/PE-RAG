@@ -12,7 +12,7 @@ Run standalone:  python -m src.pipeline.enrich
 
 from __future__ import annotations
 
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.schemas import Chunk
 
 SEP = "\n---\n"
@@ -47,16 +47,14 @@ def run_enrich(doc_id: str, *, base=None) -> list[Chunk]:
 
 
 def run_all(*, base=None) -> dict:
-    ids = list_artifacts("chunks", base=base)
-    per = {i: run_enrich(i, base=base) for i in ids}
-    return {"files": len(per), "enriched": sum(len(v) for v in per.values())}
+    return run_docs("enrich", list_artifacts("chunks", base=base),
+                    lambda d: run_enrich(d, base=base), base=base)
 
 
 if __name__ == "__main__":
     r = run_all()
-    if not r["files"]:
+    if not r["results"] and not r["failed"]:
         print("Stage 6 enrich: no data/chunks — run `python -m src.pipeline.chunk` first.")
     else:
-        print(f"Stage 6 enrich: {r['enriched']:,} chunks enriched across {r['files']} files.")
-        sample = load_artifact("chunks", list_artifacts("chunks")[0])[0]
-        print("sample header:", sample["embed_text"].split(SEP)[0])
+        enriched = sum(len(v) for v in r["results"])
+        print(f"Stage 6 enrich: {enriched:,} chunks enriched across {r['ok']} files ({r['failed']} failed).")

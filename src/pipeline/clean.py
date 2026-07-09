@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from src.observability import list_artifacts, load_artifact, persist_artifact
+from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 
 SEP = re.compile(r"={10,}")
 PROSE = re.compile(r"UNITED STATES\s*SECURITIES AND EXCHANGE COMMISSION|FORM 10-[KQ]", re.I)
@@ -47,17 +47,16 @@ def run_clean(doc_id: str, *, base=None) -> dict:
 
 
 def run_all(*, base=None) -> dict:
-    ids = list_artifacts("raw", ext="txt", base=base)
-    reports = [run_clean(i, base=base) for i in ids]
-    return {"cleaned": len(reports), "reports": reports}
+    return run_docs("clean", list_artifacts("raw", "txt", base=base),
+                    lambda d: run_clean(d, base=base), base=base)
 
 
 if __name__ == "__main__":
     r = run_all()
-    if not r["reports"]:
+    if not r["results"] and not r["failed"]:
         print("Stage 2 clean: no data/raw artifacts found — run `python -m src.pipeline.ingest` first.")
     else:
-        raw_tot = sum(x["raw_chars"] for x in r["reports"])
-        cln_tot = sum(x["cleaned_chars"] for x in r["reports"])
-        print(f"Stage 2 clean: {r['cleaned']} files, {raw_tot:,} -> {cln_tot:,} chars "
-              f"({100 * cln_tot // max(raw_tot, 1)}% retained).")
+        raw_tot = sum(x["raw_chars"] for x in r["results"])
+        cln_tot = sum(x["cleaned_chars"] for x in r["results"])
+        print(f"Stage 2 clean: {r['ok']} cleaned, {r['failed']} failed; "
+              f"{raw_tot:,} -> {cln_tot:,} chars ({100 * cln_tot // max(raw_tot, 1)}% retained).")

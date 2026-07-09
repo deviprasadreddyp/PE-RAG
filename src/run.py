@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from src.observability import artifact_path, list_artifacts, load_artifact, stage_count
+from src.observability import artifact_path, list_artifacts, load_artifact, persist_artifact, stage_count
 from src.pipeline import chunk, clean, embed, enrich, ingest, metadata, sections, store
 
 STAGE_NAMES = ("ingest", "clean", "metadata", "sections", "chunk", "enrich", "embed", "store")
@@ -106,13 +106,21 @@ def run(
         st = stages[name]
         docs = ([doc_id] if doc_id else st.docs()) if st.per_doc else [None]
         ran = skipped = 0
+        failures: list = []
         for d in docs:
             if not force and st.current(d):
                 skipped += 1
                 continue
-            st.run(d)
-            ran += 1
-        report[name] = {"ran": ran, "skipped": skipped}
+            try:
+                st.run(d)
+                ran += 1
+            except (ImportError, RuntimeError):
+                raise                                       # deps/key problem — abort; main() reports it
+            except Exception as exc:                        # noqa: BLE001 — isolate a bad document
+                failures.append({"doc_id": d, "reason": f"{type(exc).__name__}: {exc}"})
+        if failures:
+            persist_artifact("logs", f"{name}_failures", failures, base=base)
+        report[name] = {"ran": ran, "skipped": skipped, "failed": len(failures)}
     return report
 
 
@@ -135,7 +143,7 @@ def main(argv=None) -> int:
     for name in STAGE_NAMES:
         if name in report:
             r = report[name]
-            print(f"  {name:9} ran {r['ran']:>4}  skipped {r['skipped']:>4}")
+            print(f"  {name:9} ran {r['ran']:>4}  skipped {r['skipped']:>4}  failed {r.get('failed', 0):>3}")
     return 0
 
 
