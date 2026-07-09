@@ -118,3 +118,65 @@ def part_for_10k_item(item: str) -> str:
         if lo <= n <= hi:
             return name
     return ""
+
+
+# --- Company name -> ticker dictionary (corpus issuers) --------------------------
+#
+# Used by Stage 3 metadata extraction to map free text to tickers. NAMES are matched
+# case-insensitively; the TICKER symbol itself is matched only in UPPERCASE and only
+# for len>=2, so common English words that happen to be tickers ("cost" -> COST,
+# "cat" -> CAT) are NOT false-matched from lowercase prose (users type COST/CAT).
+
+_COMPANY_NAMES: dict[str, str] = {
+    "apple": "AAPL", "abbvie": "ABBV", "adobe": "ADBE",
+    "amd": "AMD", "advanced micro devices": "AMD", "amazon": "AMZN",
+    "american express": "AXP", "amex": "AXP", "boeing": "BA",
+    "bank of america": "BAC", "blackrock": "BLK",
+    "berkshire": "BRK", "berkshire hathaway": "BRK", "caterpillar": "CAT",
+    "comcast": "CMCSA", "costco": "COST", "salesforce": "CRM", "cisco": "CSCO",
+    "chevron": "CVX", "deere": "DE", "john deere": "DE", "disney": "DIS",
+    "walt disney": "DIS", "general electric": "GE", "ge aerospace": "GE",
+    "google": "GOOG", "alphabet": "GOOG", "goldman sachs": "GS", "goldman": "GS",
+    "home depot": "HD", "ibm": "IBM", "international business machines": "IBM",
+    "intel": "INTC", "johnson & johnson": "JNJ", "johnson and johnson": "JNJ",
+    "j&j": "JNJ", "jpmorgan": "JPM", "jp morgan": "JPM", "jpmorgan chase": "JPM",
+    "coca-cola": "KO", "coca cola": "KO", "coke": "KO", "eli lilly": "LLY",
+    "lilly": "LLY", "lockheed": "LMT", "lockheed martin": "LMT", "mastercard": "MA",
+    "mcdonald's": "MCD", "mcdonalds": "MCD", "meta": "META", "facebook": "META",
+    "merck": "MRK", "morgan stanley": "MS", "microsoft": "MSFT", "netflix": "NFLX",
+    "nike": "NKE", "nvidia": "NVDA", "oracle": "ORCL", "pepsi": "PEP",
+    "pepsico": "PEP", "pfizer": "PFE", "procter & gamble": "PG",
+    "procter and gamble": "PG", "p&g": "PG", "raytheon": "RTX", "starbucks": "SBUX",
+    "at&t": "T", "target": "TGT", "thermo fisher": "TMO",
+    "thermo fisher scientific": "TMO", "tesla": "TSLA", "unitedhealth": "UNH",
+    "united health": "UNH", "unitedhealth group": "UNH", "united parcel service": "UPS",
+    "visa": "V", "verizon": "VZ", "walmart": "WMT", "wal-mart": "WMT",
+    "exxon": "XOM", "exxonmobil": "XOM", "exxon mobil": "XOM",
+}
+
+# Uppercase ticker symbols matched as standalone tokens (case-sensitive), longest first.
+_UPPER_TICKERS: list[str] = sorted(
+    (t for t in SECTOR_BY_TICKER if len(t) >= 2), key=len, reverse=True
+)
+
+
+def match_companies(text: str) -> list[str]:
+    """Tickers named in ``text`` (by company name OR uppercase symbol), first-appearance order."""
+    low = text.lower()
+    pos: dict[str, int] = {}
+
+    def _note(ticker: str, i: int) -> None:
+        if ticker not in pos or i < pos[ticker]:
+            pos[ticker] = i
+
+    # 1. company names — case-insensitive, non-alphanumeric boundaries (so "j&j"/"at&t" work)
+    for alias, ticker in _COMPANY_NAMES.items():
+        m = _re.search(r"(?<![a-z0-9])" + _re.escape(alias) + r"(?![a-z0-9])", low)
+        if m:
+            _note(ticker, m.start())
+    # 2. uppercase ticker symbols — case-sensitive, standalone (avoids "cost"->COST etc.)
+    for t in _UPPER_TICKERS:
+        m = _re.search(r"(?<![A-Za-z0-9])" + t + r"(?![A-Za-z0-9])", text)
+        if m:
+            _note(t, m.start())
+    return [t for t, _ in sorted(pos.items(), key=lambda kv: kv[1])]
