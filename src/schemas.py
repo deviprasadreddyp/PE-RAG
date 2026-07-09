@@ -39,8 +39,9 @@ class DocMetadata(_Base):
 class SectionSpan(_Base):
     """A detected SEC section and its character offsets in the cleaned text (Stage 4)."""
 
-    section_name: str               # human name, e.g. "Risk Factors"
+    section_name: str               # canonical name, e.g. "Risk Factors"
     item: str = ""                  # e.g. "Item 1A" ("" for a bucketed "Other" span)
+    part: str = ""                  # parent Part in the section tree, e.g. "Part II" ("" if unknown)
     start: int
     end: int
 

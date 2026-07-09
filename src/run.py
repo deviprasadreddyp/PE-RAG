@@ -80,7 +80,8 @@ def run(
             lambda d: metadata.run_metadata(d, base=base)),
         "sections": Stage(
             "sections", True, cleaned_docs,
-            lambda d: newer(art("sections", d, "json"), art("cleaned", d, "txt")),
+            lambda d: newer(art("sections", d, "json"), art("cleaned", d, "txt"),
+                            art("metadata", d, "json")),   # sections now canonicalize using form
             lambda d: sections.run_sections(d, base=base)),
         "chunk": Stage(
             "chunk", True, cleaned_docs,

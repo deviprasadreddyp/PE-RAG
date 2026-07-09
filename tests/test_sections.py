@@ -64,8 +64,34 @@ def test_clean_title_camel_split_and_page_numbers():
     assert _clean_title("12") == ""
 
 
+def test_10k_canonical_names_and_part_tree():
+    spans = detect_sections(DOC, "10-K")
+    by_item = {s.item: s for s in spans}
+    # canonical SEC names replace the detected titles
+    assert by_item["Item 1"].section_name == "Business"
+    assert by_item["Item 1A"].section_name == "Risk Factors"
+    assert by_item["Item 7"].section_name == "Management's Discussion and Analysis"
+    # parent Part filled from the fixed 10-K structure (the section tree)
+    assert by_item["Item 1"].part == "Part I" and by_item["Item 1A"].part == "Part I"
+    assert by_item["Item 7"].part == "Part II"
+    assert by_item[""].part == ""                             # the leading "Other" span
+
+
+def test_10q_keeps_detected_title_and_no_part():
+    spans = detect_sections(DOC, "10-Q")
+    by_item = {s.item: s for s in spans}
+    # 10-Q items are Part-ambiguous: keep the detected title, never canonicalize/guess a Part
+    assert "Management" in by_item["Item 7"].section_name    # detected title, not forced canonical
+    assert all(s.part == "" for s in spans)
+
+
 def test_run_sections_reads_cleaned_writes_json(tmp_path):
     persist_artifact("cleaned", "AAPL_10K_2024", DOC, ext="txt", base=tmp_path)
+    persist_artifact("metadata", "AAPL_10K_2024",
+                     {"company": "Apple", "ticker": "AAPL", "form": "10-K",
+                      "filing_date": "2024-01-01", "source_file": "AAPL_10K_2024_full.txt"},
+                     base=tmp_path)
     run_sections("AAPL_10K_2024", base=tmp_path)
-    loaded = load_artifact("sections", "AAPL_10K_2024", base=tmp_path)
-    assert [SectionSpan(**d).item for d in loaded] == ["", "Item 1", "Item 1A", "Item 7"]
+    loaded = [SectionSpan(**d) for d in load_artifact("sections", "AAPL_10K_2024", base=tmp_path)]
+    assert [s.item for s in loaded] == ["", "Item 1", "Item 1A", "Item 7"]
+    assert loaded[2].section_name == "Risk Factors" and loaded[2].part == "Part I"  # canonicalized

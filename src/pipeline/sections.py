@@ -14,6 +14,12 @@ Detected headings that begin a substantial body become contiguous
 "Other". If nothing is detected, the whole document is a single "Other" span so
 chunking still works. Spans always cover the whole document.
 
+Each span is also **canonicalized** (Stage 4b): its ``section_name`` is normalized
+to the standard SEC name and its parent ``part`` is filled in — but only for 10-K,
+whose item numbers are globally unambiguous. 10-Q items repeat across Part I/II and
+Part boundaries aren't reliably detectable inline, so 10-Q keeps its detected title
+(we never guess). Grouping spans by ``part`` reconstructs the section tree.
+
 Persist to ``data/sections/<doc_id>.json``.  Run standalone:  python -m src.pipeline.sections
 """
 
@@ -22,7 +28,8 @@ from __future__ import annotations
 import re
 
 from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
-from src.schemas import SectionSpan
+from src.reference import canonical_section_name, part_for_10k_item
+from src.schemas import DocMetadata, SectionSpan
 
 # "Item" (opt nbsp) number+letter, opt '.'/')' , spaces/nbsp/pipe, then an Upper-cased title.
 # The pipe allows the "Item 1. | Financial Statements" layout some 10-Qs use.
@@ -52,7 +59,7 @@ def _is_crossref(text: str, start: int) -> bool:
     return bool(toks) and toks[-1].lower() in _CONNECTORS
 
 
-def detect_sections(text: str) -> list[SectionSpan]:
+def detect_sections(text: str, form: str = "") -> list[SectionSpan]:
     n = len(text)
     if n == 0:
         return []
@@ -87,13 +94,17 @@ def detect_sections(text: str) -> list[SectionSpan]:
         spans.append(SectionSpan(section_name="Other", item="", start=0, end=kept[0][0]))
     for i, (pos, item, title) in enumerate(kept):
         end = kept[i + 1][0] if i + 1 < len(kept) else n
-        spans.append(SectionSpan(section_name=title or item, item=item, start=pos, end=end))
+        # Canonicalize: standard SEC name (10-K only) + parent Part; 10-Q keeps its title.
+        name = canonical_section_name(form, item, fallback=title or item)
+        part = part_for_10k_item(item) if form == "10-K" else ""
+        spans.append(SectionSpan(section_name=name, item=item, part=part, start=pos, end=end))
     return spans
 
 
 def run_sections(doc_id: str, *, base=None) -> list[SectionSpan]:
     text = load_artifact("cleaned", doc_id, ext="txt", base=base)
-    spans = detect_sections(text)
+    form = DocMetadata(**load_artifact("metadata", doc_id, base=base)).form  # for canonicalization
+    spans = detect_sections(text, form)
     persist_artifact("sections", doc_id, spans, base=base)
     return spans
 
