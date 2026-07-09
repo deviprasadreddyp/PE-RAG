@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Embeddings + reranker are LOCAL (no key). The single answer call goes through OpenRouter
     # (OpenAI-compatible), so the only key needed is OPENROUTER_API_KEY.
     openrouter_api_key: SecretStr = SecretStr("")   # the single answer-generation call (via OpenRouter)
+    langsmith_api_key: SecretStr = SecretStr("")    # optional: LangSmith tracing (traces, tokens, latency)
+
+    # --- Observability ---
+    langsmith_project: str = "PE-RAG"
 
     # --- Models ---
     embedding_model: str = "BAAI/bge-large-en-v1.5"   # local (sentence-transformers), 1024-dim, no API

@@ -28,6 +28,12 @@ python-dotenv>=1.0,<2
 #         pip install "sentence-transformers>=3,<6"
 # sentence-transformers>=3.0,<6
 
+# --- Evaluation (generation quality) — OPTIONAL, heavy; needed only for RAGAS runs. Install with:
+#     pip install "ragas>=0.2,<0.4" langchain-huggingface
+#   LangSmith tracing needs no extra install (langsmith ships with langchain) — just set LANGSMITH_API_KEY.
+# ragas>=0.2,<0.4
+# langchain-huggingface>=0.1,<1
+
 # --- Serving / UI (Phase 2) ---
 fastapi>=0.110,<1
 uvicorn[standard]>=0.29,<1
