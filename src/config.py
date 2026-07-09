@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     top_k: int = Field(8, gt=0)
     candidate_pool: int = Field(30, gt=0)
 
+    # --- Embedding request policy (explicit; not left to SDK defaults) ---
+    embed_batch_size: int = Field(100, gt=0)     # chunks per OpenAI embeddings request
+    embed_max_retries: int = Field(3, ge=0)      # retries w/ exponential backoff on 429/5xx
+
     # --- Paths ---
     data_dir: str = "data"
     corpus_dir: str = "edgar_corpus"

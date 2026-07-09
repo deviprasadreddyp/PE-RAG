@@ -41,7 +41,13 @@ class OpenAIEmbedder:
         from langchain_openai import OpenAIEmbeddings  # lazy: only when actually embedding
 
         self.model = model or settings.embedding_model
-        self._client = OpenAIEmbeddings(model=self.model, api_key=api_key or settings.require_openai_key())
+        # Explicit batch size + retries (OpenAI SDK applies exponential backoff on 429/5xx).
+        self._client = OpenAIEmbeddings(
+            model=self.model,
+            api_key=api_key or settings.require_openai_key(),
+            chunk_size=settings.embed_batch_size,
+            max_retries=settings.embed_max_retries,
+        )
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return self._client.embed_documents(texts)

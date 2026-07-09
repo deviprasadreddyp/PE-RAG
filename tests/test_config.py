@@ -68,6 +68,15 @@ def test_require_key_guards():
     assert _mk(openai_api_key="sk-x").require_openai_key() == "sk-x"
 
 
+def test_embedding_policy_defaults(monkeypatch):
+    monkeypatch.delenv("EMBED_BATCH_SIZE", raising=False)
+    monkeypatch.delenv("EMBED_MAX_RETRIES", raising=False)
+    s = _mk()
+    assert s.embed_batch_size == 100 and s.embed_max_retries == 3
+    monkeypatch.setenv("EMBED_BATCH_SIZE", "256")
+    assert _mk().embed_batch_size == 256
+
+
 def test_paths():
     s = _mk()
     assert s.data_path == Path("data")
