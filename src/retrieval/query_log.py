@@ -15,9 +15,10 @@ from pathlib import Path
 
 from src.config import settings
 
-# Claude Opus 4.8 pricing (USD per 1M tokens) — see ADR-005.
-_INPUT_PER_1M = 5.0
-_OUTPUT_PER_1M = 25.0
+# Generation pricing (USD per 1M tokens) — openai/gpt-4o via OpenRouter (ADR-014); approximate,
+# OpenRouter pricing varies by model. Override if you switch generation_model.
+_INPUT_PER_1M = 2.5
+_OUTPUT_PER_1M = 10.0
 
 
 def cost_usd(usage: dict) -> float:

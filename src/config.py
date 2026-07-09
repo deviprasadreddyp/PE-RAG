@@ -8,8 +8,8 @@ a key is unset, so the deterministic stages that need no key still run.
 Usage::
 
     from src.config import settings
-    settings.embedding_model            # "text-embedding-3-large"
-    settings.require_openai_key()       # raises if OPENAI_API_KEY is unset
+    settings.embedding_model            # "BAAI/bge-large-en-v1.5" (local)
+    settings.require_openrouter_key()   # raises if OPENROUTER_API_KEY is unset (generation)
 """
 
 from __future__ import annotations
@@ -32,12 +32,14 @@ class Settings(BaseSettings):
     )
 
     # --- Secrets (empty until provided; validated at point of use) ---
-    openai_api_key: SecretStr = SecretStr("")       # embeddings: text-embedding-3-large
-    anthropic_api_key: SecretStr = SecretStr("")    # the single answer-generation call (Phase 2)
+    # Embeddings + reranker are LOCAL (no key). The single answer call goes through OpenRouter
+    # (OpenAI-compatible), so the only key needed is OPENROUTER_API_KEY.
+    openrouter_api_key: SecretStr = SecretStr("")   # the single answer-generation call (via OpenRouter)
 
     # --- Models ---
     embedding_model: str = "BAAI/bge-large-en-v1.5"   # local (sentence-transformers), 1024-dim, no API
-    generation_model: str = "claude-opus-4-8"
+    generation_model: str = "openai/gpt-4o"           # OpenRouter model id (ChatGPT via OpenRouter)
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # --- Chunking: Section-Aware Hierarchical Chunking (see architecture/CHUNKING_STRATEGY.md) ---
     # Sections are the semantic unit (the parents). WITHIN each section the recursive splitter
@@ -102,17 +104,11 @@ class Settings(BaseSettings):
         return self.data_path / ".embedding_cache"
 
     # --- Secret guards (fail loudly, only when actually needed) ---
-    def require_openai_key(self) -> str:
-        v = self.openai_api_key.get_secret_value()
-        if not v:
-            raise RuntimeError("OPENAI_API_KEY is not set (needed for embeddings). Add it to .env.")
-        return v
-
-    def require_anthropic_key(self) -> str:
-        v = self.anthropic_api_key.get_secret_value()
+    def require_openrouter_key(self) -> str:
+        v = self.openrouter_api_key.get_secret_value()
         if not v:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set (needed for the answer call). Add it to .env."
+                "OPENROUTER_API_KEY is not set (needed for the single answer call). Add it to .env."
             )
         return v
 

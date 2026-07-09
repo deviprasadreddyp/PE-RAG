@@ -20,9 +20,9 @@ def _result(refused=False):
     )
 
 
-def test_cost_calc_claude_pricing():
-    # 1M input @ $5 + 1M output @ $25 = $30
-    assert cost_usd({"input_tokens": 1_000_000, "output_tokens": 1_000_000}) == 30.0
+def test_cost_calc_openrouter_pricing():
+    # gpt-4o via OpenRouter: 1M input @ $2.5 + 1M output @ $10 = $12.5
+    assert cost_usd({"input_tokens": 1_000_000, "output_tokens": 1_000_000}) == 12.5
     assert cost_usd({}) == 0.0
 
 
