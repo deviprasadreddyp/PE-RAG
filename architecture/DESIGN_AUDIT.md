@@ -141,3 +141,61 @@ Much of Part B is really *documentation explicitness*, which a Physical Spec wou
 - **Write the spec-explicitness docs?** RRF formula, prompt template, output/citation/confidence schema,
   hard-vs-soft filtering, log taxonomy, project-structure map, dedicated ASSUMPTIONS, three-level doc.
 - **Build Phase 2?** retrieval → fusion → dedup → context builder → single call → logging → eval → debug UI.
+
+---
+
+# Part C — Category A: RESOLVED (this supersedes the "deferred" lists above for these items)
+
+**Implemented (code + tests):**
+- ✅ **#5 Per-stage error isolation** — `observability.run_docs` + orchestrator; one bad filing is
+  dead-lettered to `data/logs/<stage>_failures.json`, never aborts the rest. (commit `9a1aa09`)
+- ✅ **#4 / #23 Embedding batch size + retry/backoff** — `embed_batch_size=100`, `embed_max_retries=3`
+  (exponential backoff on 429/5xx) wired into `OpenAIEmbedder`. (commit `34d9205`)
+- ✅ **#2 Section-aware deterministic chunk IDs** — `{doc_id}__{Section}_c{NN}`, 32,050/32,050 unique
+  on the real corpus. (commit `7f25d48`)
+
+**Documented (explicit spec written — code where noted is Phase 2):**
+- ✅ **#7/#21 Retrieval strategy + hybrid spec**, **#8 hard-vs-soft filtering**, **#10 RRF formula**
+  (`Σ 1/(k+rank)`, k=60), **#12 prompt template**, **#13 output schema**, **#14 citation format**,
+  **#15 confidence**, **#16 log taxonomy**, **#20 project-structure map**, **#11 storage schema** —
+  all in `PHYSICAL_SPEC.md`.
+- ✅ **#25 Dedicated assumptions** — `ASSUMPTIONS.md`.
+- ✅ **Three-level architecture** (Business/Logical/Physical) — `ARCHITECTURE.md` (+ HLD + PHYSICAL_SPEC).
+- ⚠️ **#1 Document parsing** — regex strategy documented; **canonical section-name map + section tree
+  still pending** (still uses raw heading titles).
+
+---
+
+# REMAINING PENDING — full list (nothing else is done)
+
+### A. The open design decision (highest impact)
+1. **Cleaning philosophy** — switch Stage 2 from aggressive blob-cut to **controlled normalization**,
+   and split into **Normalization** (cosmetic/reversible) + **Structural Parsing**. Would re-run
+   clean → sections → chunk. *(DESIGN_AUDIT Part A)*
+
+### B. Small hardening of the built pipeline (code)
+2. Doc-level **SHA-256 + `data/raw_index.json`** for incremental indexing (#3 / Part A #2).
+3. **Controlled-normalization sub-steps** — explicit CRLF→LF, tabs→spaces, multi-space collapse
+   (table-safe) (Part A #3).
+4. **Metadata fields** — add `industry` / `source` / `document_id`; decide `form` vs `filing_type`;
+   company/CIK source (Part A #4, Part B #—).
+5. **Canonical section-name map + explicit section tree** (#1).
+6. **Chunk sizing** — keep 3000 chars/300 or move to ~1000 **tokens**/150 (token length fn) (Part A #5).
+7. **Enrichment header** — add **Ticker & Quarter** (Part A #6, Part B #—).
+8. **Typed `Document` and `EmbeddingRecord`** models (#19).
+9. **Chroma record `hash`** field (#11) — (`created_at` intentionally omitted for determinism).
+10. **Collection name** — `sec_filings` vs model-namespaced (Part A #7).
+11. **Project-structure refactor** into per-concern folders (documented; refactor not done) (#20).
+
+### C. Phase 2 build (code — separate plan)
+12. **Retrieval**: `parse` (metadata filters) → `search` (BM25 top20 + vector top20) → `fuse` (RRF) →
+    dedup → top8 → `context` builder (#7/#8/#21/#22).
+13. **Single Claude call** + `generation/prompt.py` (grounded, cite-or-refuse) (#12).
+14. **Confidence score** (deterministic, mean top-k similarity) (#15).
+15. **Per-query logging** + **evaluation dataset & metrics code** (recall@k, MRR, faithfulness) (#16/#17).
+16. **Debug UI** (Streamlit) + `frontend/app.py`; observability folders `retrieval/ prompt/ responses/` (#18).
+17. **Cost & latency tracking** in `Answer.usage` + query log (#24).
+
+### D. Real runs (need key / compute — not code)
+18. **Real embed run** (`OPENAI_API_KEY`, ~32K chunks) → populate `data/embeddings/`.
+19. **Real Chroma + BM25 build** (`python -m src.pipeline.store`) after #18.
