@@ -69,7 +69,8 @@ def persist_artifact(
         if not isinstance(obj, str):
             raise TypeError("txt artifacts require a str obj")
         text = obj
-    path.write_text(text, encoding="utf-8")
+    # newline="" -> write '\n' verbatim (no OS CRLF translation), so artifacts are byte-faithful.
+    path.write_text(text, encoding="utf-8", newline="")
     return path
 
 
