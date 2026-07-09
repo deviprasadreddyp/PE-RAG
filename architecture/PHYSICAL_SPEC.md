@@ -3,7 +3,7 @@
 The concrete "how" — exact modules, data models, config, storage schema, algorithms (with
 formulae), policies, and logging. Companion to `HLD.md` (logical), `ARCHITECTURE.md` (business), and
 `RETRIEVAL_DESIGN.md` (Phase 2 behavioral/operational TDS). Both phases are **built and tested**; the
-only deferred steps are the real embed/store run and a live Claude call (need keys/compute).
+only deferred steps are the real embed/store run and a live generation call (need compute/key).
 
 ## 1. Project structure
 
@@ -22,7 +22,7 @@ src/
                        #   hybrid_fusion · reranker · deduplicator · evidence_builder · guardrails ·
                        #   prompt_builder · response_parser · citation_mapper · query_log ·
                        #   retrieval_pipeline (orchestrator)
-  generation/          # generate.py — the single grounded Claude call
+  generation/          # generate.py — the single grounded call (GPT via OpenRouter)
   api/                 # main.py — FastAPI (POST /query, GET /health)
   frontend/            # app.py — Streamlit debug UI
   eval/                # metrics.py · run_eval.py · eval_set.jsonl (golden set)
@@ -58,14 +58,16 @@ All chunk metadata is Chroma-safe (str/int/float/bool, no None, no lists). `extr
 
 ## 3. Configuration (`src/config.py`, env / `.env`)
 
-`openai_api_key`, `anthropic_api_key` (SecretStr) · `embedding_model=text-embedding-3-large` ·
-`generation_model=claude-opus-4-8` · `chunk_max_chars=3000` (per-chunk MAX cap), `chunk_overlap=300` (chars) ·
+`openrouter_api_key` (SecretStr; the only key — embeddings + reranker are local) ·
+`embedding_model=BAAI/bge-large-en-v1.5` (local) · `generation_model=openai/gpt-4o` ·
+`openrouter_base_url=https://openrouter.ai/api/v1` ·
+`chunk_max_chars=3000` (per-chunk MAX cap), `chunk_overlap=300` (chars) ·
 `vector_top_k=20`, `bm25_top_k=20`, `rrf_k=60`, `candidate_pool=30`, `rerank_top_k=8`, `min_similarity=0.35` · `embed_batch_size=100`, `embed_max_retries=3` ·
 `data_dir`, `corpus_dir`, `chroma_dir`, `collection_base`. `collection_name` = `{base}__{model}`.
 
 ## 4. Storage schema
 
-**Chroma** collection `sec_filings__text-embedding-3-large` (cosine): each record =
+**Chroma** collection `sec_filings__BAAI-bge-large-en-v1.5` (cosine; model-namespaced): each record =
 `id` (chunk_id) · `embedding` · `document` (original text) · `metadata` (ticker/company/form/
 fiscal_period/year/quarter/section/section_index/source_url/…). *(Planned add: `hash`; `created_at`
 is intentionally omitted for deterministic artifacts.)*
@@ -87,7 +89,7 @@ question
   → deduplicate (content_hash + per-section cap)
   → evidence [E1..] (tag citations, fit token budget)
   → guardrails (coverage / diversity / min-similarity / cite-or-refuse)
-  → single Claude call    ← made ONLY if guardrails pass (refusals = zero calls)
+  → single LLM call (GPT via OpenRouter)   ← made ONLY if guardrails pass (refusals = zero calls)
   → parse structured answer + resolve citations + log
 ```
 
@@ -131,7 +133,7 @@ USER:
   Output format: Executive Summary · Comparison · Supporting Evidence · Citations · Confidence
 ```
 
-Exactly **one** `client.messages.create()` produces the answer.
+Exactly **one** `ChatOpenAI.with_structured_output(...).invoke(...)` (OpenRouter) produces the answer.
 
 ## 7. Output schema (Phase 2)
 
@@ -164,7 +166,7 @@ the eval set). A refusal ("Information unavailable") always reports **Low**.
 
 - **Embedding requests** — batch `embed_batch_size` (100) per call; `embed_max_retries` (3) with the
   OpenAI SDK's exponential backoff on 429/5xx. Content-hash cache avoids re-embedding.
-- **Generation retry (Phase 2)** — Anthropic SDK auto-retries 429/5xx with backoff; one logical call.
+- **Generation retry** — the OpenAI/OpenRouter client auto-retries 429/5xx with backoff; one logical call.
 - **Error isolation** — every per-doc stage isolates failures (`observability.run_docs`): a bad
   filing is dead-lettered to `data/logs/<stage>_failures.json` and skipped, never aborting the rest.
 - **Idempotency** — upsert by `chunk_id`; stages skip when their artifact is current (orchestrator).
@@ -180,7 +182,7 @@ the eval set). A refusal ("Information unavailable") always reports **Low**.
 
 ## 12. Cost & latency tracking (built)
 
-Per query, `src/retrieval/query_log.py` records generation input/output tokens, `$` cost (Claude
-Opus 4.8 pricing $5/$25 per 1M in/out), and wall-clock latency into the query log; surfaced in the
-debug UI. Live token capture from the structured call is best-effort (populated once real Claude
-calls run).
+Per query, `src/retrieval/query_log.py` records generation input/output tokens, `$` cost
+(openai/gpt-4o via OpenRouter, ~$2.5/$10 per 1M in/out), and wall-clock latency into the query log;
+surfaced in the debug UI. Live token capture from the structured call is best-effort (populated once
+real generation calls run).

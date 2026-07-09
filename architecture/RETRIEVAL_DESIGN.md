@@ -94,7 +94,7 @@ sequenceDiagram
     participant F as fuse+rerank+dedup
     participant G as guardrails
     participant B as prompt_builder
-    participant L as generation (Claude, 1 call)
+    participant L as generation (GPT via OpenRouter, 1 call)
     U->>P: question
     P->>Q: validate → classify → extract → filter → plan   (deterministic)
     P->>R: hybrid search within hard filter (top20 + top20)
@@ -178,8 +178,9 @@ Bounds are enforced with pydantic `Field(ge=, le=)` (P2).
 | `max_query_chars` | 1000 | 50 | 4000 | reject pathological queries |
 | `min_query_chars` | 3 | 1 | 50 | reject empty/one-char queries |
 | `rerank_model` | `BAAI/bge-reranker-base` | — | — | local cross-encoder; `-large` if latency budget allows |
-| `generation_model` | `claude-opus-4-8` | — | — | the single grounded call ([ADR-005](ADR.md)) |
-| `embedding_model` | `text-embedding-3-large` | — | — | query + corpus embeddings ([ADR-004](ADR.md)) |
+| `generation_model` | `openai/gpt-4o` | — | — | the single grounded call, via OpenRouter ([ADR-014](ADR.md)) |
+| `openrouter_base_url` | `https://openrouter.ai/api/v1` | — | — | OpenAI-compatible endpoint for generation |
+| `embedding_model` | `BAAI/bge-large-en-v1.5` | — | — | local query + corpus embeddings ([ADR-013](ADR.md)) |
 | `embed_batch_size` | 100 | 1 | 2048 | chunks per OpenAI request |
 | `embed_max_retries` | 3 | 0 | 10 | backoff on 429/5xx |
 
@@ -214,7 +215,7 @@ short-circuits **before** the LLM call (still zero or one call — here zero).
 | Both retrievers | both fail | refuse ("retrieval unavailable"), no LLM call | P17 |
 | Reranker (cross-encoder) | model not installed / error | **skip reranking**, keep RRF order | P10 |
 | Guardrail refusal | insufficient/weak evidence | return refusal, **no LLM call** | P13/P17 |
-| LLM call (Claude) | 429/5xx | SDK auto-retry with backoff; still **one logical call** | P15 |
+| LLM call (GPT/OpenRouter) | 429/5xx | SDK auto-retry with backoff; still **one logical call** | P15 |
 | LLM call | hard failure after retries | return error envelope, log, no partial hallucination | P15/P17 |
 | Metadata extract | ambiguous/no match | proceed with **no hard filter** (soft retrieval over all) | P6/P17 |
 
@@ -236,7 +237,7 @@ dominate, everything else is sub-100ms):
 | Vector ANN search (Chroma) | < 40 ms |
 | RRF + dedup | < 5 ms |
 | Cross-encoder rerank (base, CPU, ~30 pairs) | ~150–500 ms |
-| **Single Claude call (streamed)** | ~2–6 s |
+| **Single LLM call (GPT via OpenRouter)** | ~2–6 s |
 | **End-to-end** | **< ~8 s** |
 
 **Token budget** (Opus 4.8 has a 1M context, so this is about *precision & cost*, not fitting):
@@ -262,19 +263,19 @@ flowchart LR
     API --> PIPE[retrieval_pipeline]
     PIPE --> VEC[vector_retriever] --> CHROMA[(Chroma)]
     PIPE --> BM[bm25_retriever] --> BJSON[(bm25.json)]
-    VEC --> EMB[OpenAI embeddings]
+    VEC --> EMB[BGE embeddings - local]
     PIPE --> RR[cross-encoder reranker - local]
-    PIPE --> GEN[generation] --> CLAUDE[Anthropic Claude Opus 4.8]
+    PIPE --> GEN[generation] --> GPT[OpenRouter -> openai/gpt-4o]
 ```
 
 ---
 
 ## 12. LangChain module map (infrastructure only — [ADR-011](ADR.md))
 
-**Use LangChain for:** `langchain_openai.OpenAIEmbeddings` (query + corpus), `langchain_chroma.Chroma`
-vector retriever, `langchain_core.documents.Document`, `langchain_core.prompts.PromptTemplate`,
-structured **output parser**, `langchain_anthropic.ChatAnthropic` for the single call via
-`.with_structured_output()`, and usage **callbacks** for token counting.
+**Use LangChain for:** `langchain_chroma.Chroma` vector retriever, `langchain_core.documents.Document`,
+`langchain_core.prompts.PromptTemplate`, structured **output parser**, and
+`langchain_openai.ChatOpenAI` (pointed at OpenRouter's `base_url`) for the single call via
+`.with_structured_output()`. (Embeddings are local `sentence-transformers` — not LangChain.)
 
 **Do NOT use LangChain for:** query understanding, metadata extraction, retrieval planning, RRF,
 guardrails, context/evidence builder, citation mapping. **No Chains. No Agents. No memory.** Those are
@@ -305,7 +306,7 @@ GET /health → { "status": "ok", "chroma": bool, "bm25": bool, "chunks": int }
 
 Per query: question · intents · extracted metadata · hard filter · BM25 ids · vector ids · RRF ids ·
 reranked ids · final evidence ids · prompt (+ `prompt_version`) · response · **latency breakdown** ·
-embedding tokens · input/output tokens · **cost_usd** (Claude $5/$25 per 1M in/out) · guardrail action.
+input/output tokens · **cost_usd** (gpt-4o via OpenRouter, ~$2.5/$10 per 1M) · guardrail action.
 
 Quality metrics (Stage 21 eval): recall@k, precision@k, MRR, **NDCG**, groundedness, **citation
 coverage** (fraction of claims with a resolvable `[E#]`).
@@ -316,7 +317,8 @@ coverage** (fraction of claims with a resolvable `[E#]`).
 
 **In scope for the MVP (built):** secrets only via `.env` / env (`SecretStr`, git-ignored, never in
 logs or reprs); the query log stores prompts/responses but **no API keys**; input validation caps
-query size (basic abuse guard); OpenAI/Anthropic keys isolated to the point of use (`require_*`).
+query size (basic abuse guard); the OpenRouter key is isolated to the point of use
+(`require_openrouter_key`); embeddings + reranker are local (no key).
 
 **Documented as roadmap, not built** (gold-plating for a single-user, public-data demo): request rate
 limiting, PII detection/scrubbing, per-tenant auth, secrets vault. SEC filings are public, so there is
@@ -343,7 +345,7 @@ in manual/demo runs with a key.
 
 | Stage | Scope |
 |-------|-------|
-| **MVP (this build)** | deterministic retrieval + one grounded Claude call + citations + debug UI + eval harness; local Chroma/BM25; single user |
+| **MVP (this build)** | deterministic retrieval + one grounded LLM call (GPT via OpenRouter) + citations + debug UI + eval harness; local embeddings/reranker + Chroma/BM25; single user |
 | **Pilot** | real embed/store run on full corpus; rate limiting + auth on the API; cached query results; prompt-version A/B via the log |
 | **Production** | managed vector store (or Chroma server), autoscaling API, monitoring/alerting dashboards, cost budgets, incremental re-index on new filings (already supported by `raw_index.json`) |
 | **Enterprise** | multi-tenant, PII/compliance controls, secrets vault, SLA/latency SLOs, human-in-the-loop eval |
@@ -390,7 +392,7 @@ where they take effect, not written as prose-only).
 | **P12** | context builder + evidence grounding | `evidence_builder.py` (`[E#]`) |
 | **P13** | guardrails (decision table §8) | `guardrails.py` |
 | **P14** | prompt builder (+ token budget §10, `prompt_version`) | `prompt_builder.py` |
-| **P15** | single Claude call | `generation/generate.py` (`Generator` protocol, one call) |
+| **P15** | single LLM call (GPT via OpenRouter) | `generation/generate.py` (`Generator` protocol, one call) |
 | **P16** | response parser + citation mapping | `response_parser.py`, `citation_mapper.py` |
 | **P17** | pipeline orchestrator (fallbacks §9) | `retrieval_pipeline.py` |
 | **P18** | query logging + debug trace (§14) | logging into pipeline + `data/logs/queries/` |

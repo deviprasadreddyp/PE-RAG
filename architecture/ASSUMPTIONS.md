@@ -43,13 +43,16 @@ where the data drove it, the source is cited.
   skip already-current stages.
 
 ## Embeddings & retrieval
-- **Embeddings:** OpenAI `text-embedding-3-large`, batched (100) with 3 retries (exponential backoff),
-  content-hash cached. Behind an `Embedder` protocol (Voyage/local are drop-in alternatives).
+- **Embeddings:** local `BAAI/bge-large-en-v1.5` (sentence-transformers, 1024-dim, cosine-normalized;
+  query gets the bge instruction prefix), batched + content-hash cached. Behind an `Embedder` protocol
+  (any provider is a drop-in). No API key. See ADR-013.
+- **Reranking:** local cross-encoder `BAAI/bge-reranker-base` (`-large` optional), identity fallback.
 - **Hybrid retrieval:** hard metadata filters first, then BM25 + vector fused with RRF (`k=60`,
   rank-only, no score normalization). See `PHYSICAL_SPEC.md` §5.
 
-## Generation (Phase 2)
-- **Single Claude call** (`claude-opus-4-8`) produces the answer.
+## Generation
+- **Single LLM call** — `openai/gpt-4o` via **OpenRouter** (ChatOpenAI + base_url, structured output)
+  produces the answer. `OPENROUTER_API_KEY` is the only key the system needs. See ADR-014.
 - **Cite-or-refuse:** every claim cited to `[Ticker Form Period · Section] · chunk_id`; if the context
   is insufficient the system says "Information unavailable in the provided filings."
 - **Confidence** is deterministic (mean top-k similarity → High/Medium/Low), no LLM.

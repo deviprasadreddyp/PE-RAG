@@ -17,9 +17,9 @@ def test_dockerignore_excludes_secrets_and_data():
     assert ".env" in di and "data/" in di                 # keep secrets + runtime data out of the image
 
 
-def test_env_example_lists_both_keys():
+def test_env_example_lists_the_openrouter_key():
     env = (ROOT / ".env.example").read_text("utf-8")
-    assert "OPENAI_API_KEY" in env and "ANTHROPIC_API_KEY" in env
+    assert "OPENROUTER_API_KEY" in env                    # the single key the system needs
 
 
 def test_compose_mounts_index_and_env():

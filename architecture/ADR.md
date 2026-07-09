@@ -29,21 +29,20 @@ fragile normalization.
 **Consequences.** No score normalization; robust to outliers; industry-standard default. Implemented
 ourselves (not via LangChain EnsembleRetriever) so the formula is explicit and testable.
 
-## ADR-004 — OpenAI `text-embedding-3-large` for embeddings ✅
+## ADR-004 — OpenAI `text-embedding-3-large` for embeddings 🔁 (superseded by ADR-013)
 **Context.** Need strong retrieval embeddings for dense financial prose and tables.
 **Decision.** **OpenAI `text-embedding-3-large`**, batched + content-hash cached, behind an
 `Embedder` protocol.
-**Consequences.** High-quality dense retrieval; a paid dependency and a network call at query time
-(mitigated by cache + BM25 fallback). Model change ⇒ new collection namespace (ADR-010).
+**Consequences.** High-quality dense retrieval; a paid dependency and a network call at query time.
+**Superseded:** replaced by a local model (ADR-013) to drop the paid API and network hop for
+embeddings; the `Embedder` protocol made this a drop-in swap.
 
-## ADR-005 — Claude Opus 4.8 for the single generation call ✅
-**Context.** The one generative step must produce grounded, citation-bearing financial answers that
-never fabricate figures. Project standard (`CLAUDE.md`, config) defaults to Claude.
-**Decision.** **Claude `claude-opus-4-8`** via the Anthropic SDK / `langchain_anthropic.ChatAnthropic`
-with structured output; adaptive thinking + streaming.
-**Consequences.** Strong grounded reasoning, 1M context headroom, one auditable request.
-*Note:* the pasted Phase-2 design suggested OpenAI for this call; we chose Claude to match the project
-standard. Embeddings remain OpenAI (ADR-004) — the two providers are independent.
+## ADR-005 — Claude Opus 4.8 for the single generation call 🔁 (superseded by ADR-014)
+**Context.** The one generative step must produce grounded, citation-bearing financial answers.
+**Decision.** **Claude `claude-opus-4-8`** via `langchain_anthropic.ChatAnthropic` with structured output.
+**Consequences.** Strong grounded reasoning, one auditable request.
+**Superseded:** the generation provider was switched to OpenAI models via OpenRouter (ADR-014) at the
+project owner's direction; the single-call constraint (ADR-008) and structured output are unchanged.
 
 ## ADR-006 — Section-aware hierarchical chunking, char max-cap ✅
 **Context.** Filings are hierarchical (Items), have ~no blank-line paragraphs, and carry load-bearing
@@ -88,9 +87,10 @@ fresh index (no dimension/space mismatch). This is our embedding-versioning stor
 
 ## ADR-011 — LangChain as infrastructure only ✅
 **Context.** LangChain accelerates I/O plumbing but its Chains/Agents hide control flow we must defend.
-**Decision.** Use LangChain for embeddings, Chroma, `Document`, `PromptTemplate`, output parsing,
-`ChatAnthropic`, and callbacks. **No Chains, no Agents, no memory** — business logic (query
-understanding, planning, RRF, guardrails, evidence, citations) is our own deterministic code.
+**Decision.** Use LangChain for Chroma, `Document`, `PromptTemplate`, output parsing, and
+`ChatOpenAI` (pointed at OpenRouter) for the single call. **No Chains, no Agents, no memory** —
+business logic (query understanding, planning, RRF, guardrails, evidence, citations) is our own
+deterministic code. (Embeddings + reranker are local `sentence-transformers`, outside LangChain.)
 **Consequences.** We keep full control and testability of every decision while still reusing battle-
 tested connectors.
 
@@ -100,3 +100,26 @@ tested connectors.
 isolation dead-letters bad docs; a query log captures the full retrieval trace at request time.
 **Consequences.** Any answer is traceable to its evidence and every stage is independently inspectable;
 slightly more disk I/O — a worthwhile trade for trust and debuggability.
+
+## ADR-013 — Local `BAAI/bge-large-en-v1.5` embeddings ✅ (supersedes ADR-004)
+**Context.** OpenAI embeddings are a paid dependency with a per-query network hop; a strong open
+model removes both while keeping retrieval quality high.
+**Decision.** **Local `BAAI/bge-large-en-v1.5`** via `sentence-transformers` (1024-dim, cosine-
+normalized), behind the existing `Embedder` protocol. Queries get the bge instruction prefix;
+passages get none. Content-hash cache unchanged; model-namespaced collection (ADR-010) rolls to a
+fresh index automatically.
+**Consequences.** No API key or network call for embeddings; runs locally/offline. Adds a
+`sentence-transformers`/torch dependency (lazy-imported; shared with the reranker) — heavier install,
+and best on Python 3.11-3.12 (the Docker image). Bge cosine scores skew higher, so similarity
+thresholds are tunable via the eval set.
+
+## ADR-014 — OpenAI models via OpenRouter for generation ✅ (supersedes ADR-005)
+**Context.** The project owner wants ChatGPT-family generation and a single provider key that can
+reach many models.
+**Decision.** The one grounded call uses **`openai/gpt-4o` via OpenRouter** — LangChain `ChatOpenAI`
+pointed at OpenRouter's OpenAI-compatible `base_url`, with `.with_structured_output(AnswerBody)`.
+`OPENROUTER_API_KEY` is the only key the system needs (embeddings + reranker are local).
+**Consequences.** One API request, structured output, provider-swappable by changing
+`generation_model` (any OpenRouter model id) — no code change. Also removes the latent
+`langchain-anthropic` dependency (never in requirements); `langchain-openai` is. Single-call
+constraint (ADR-008) preserved.

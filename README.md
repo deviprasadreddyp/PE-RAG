@@ -2,7 +2,7 @@
 
 An **observable ingestion & retrieval pipeline** that answers a private-equity analyst's
 natural-language question over **SEC EDGAR filings** (10-K / 10-Q) and returns a structured,
-grounded, cited answer from a **single Claude API call**.
+grounded, cited answer from a **single LLM API call** (OpenAI models via OpenRouter).
 
 We don't "build a RAG" — we build an observable pipeline where **every stage persists an
 inspectable artifact**, all processing is **deterministic except the one generation call**, and the
@@ -10,17 +10,18 @@ whole system is traceable end to end.
 
 > **Status.** Both phases are **built and tested** (209 tests): the offline **ingestion & indexing
 > pipeline** (Stages 1–8) and the online **retrieval + single-call generation** layer (validation →
-> query understanding → hybrid retrieval → RRF → rerank → guardrails → one Claude call → cited
+> query understanding → hybrid retrieval → RRF → rerank → guardrails → one LLM call → cited
 > answer), plus per-query logging, an eval harness, a FastAPI service, and a Streamlit debug UI.
-> The only **deferred** steps need external resources: the real embed/store run (`OPENAI_API_KEY`),
-> a live Claude call (`ANTHROPIC_API_KEY`), and the optional cross-encoder reranker
-> (`pip install sentence-transformers`). See `architecture/RETRIEVAL_DESIGN.md` and `ADR.md`.
+> Embeddings and the reranker are **local** (`sentence-transformers`, no key); the single answer
+> call goes through **OpenRouter** (`OPENROUTER_API_KEY`). The only **deferred** steps need
+> compute/keys: the real embed/store run and a live generation call. See
+> `architecture/RETRIEVAL_DESIGN.md` and `ADR.md`.
 
 ## The one hard rule
 
-Indexing and retrieval run **beforehand**; the final answer comes from **exactly one Claude API
-request**. Everything expensive — cleaning, metadata, sectioning, chunking, embedding, retrieval —
-happens before that single call.
+Indexing and retrieval run **beforehand**; the final answer comes from **exactly one LLM API
+request** (OpenAI via OpenRouter). Everything expensive — cleaning, metadata, sectioning, chunking,
+embedding, retrieval, reranking — happens before that single call, and is deterministic or local ML.
 
 ## Architecture
 
@@ -33,14 +34,14 @@ OFFLINE (python -m src.run --stage all) — one inspectable artifact per stage:
    → sections → data/sections/    detect Item headings -> {section_name, item, start, end}
    → chunk    → data/chunks/       section-aware hierarchical chunks (recursive, within sections)
    → enrich   → data/chunks/       prepend Company|Filing|Year|Section as embed_text
-   → embed    → data/embeddings/   OpenAI text-embedding-3-large, batched, content-hash cached
+   → embed    → data/embeddings/   local BAAI/bge-large-en-v1.5, batched, content-hash cached
    → store    → data/vectorstore/  Chroma (vectors + text + metadata) + BM25 index
 
 ONLINE (src/retrieval/retrieval_pipeline.py) — per question, no LLM until the last step:
  question → validate → classify + extract metadata → hard filter → plan
           → hybrid retrieve (vector top-20 + BM25 top-20) → RRF (k=60) → rerank (top-8)
           → dedup → evidence [E1..] → guardrails (cite-or-refuse)
-          → ONE Claude call (grounded, structured) → answer + citations → data/logs/queries.jsonl
+          → ONE LLM call (GPT via OpenRouter, grounded, structured) → answer + citations → data/logs/queries.jsonl
 ```
 
 Everything left of the single call is deterministic or local ML; refusals (invalid query, weak
@@ -62,7 +63,7 @@ Design docs: [`architecture/RETRIEVAL_DESIGN.md`](architecture/RETRIEVAL_DESIGN.
 | 4 | sections | `src/pipeline/sections.py` | `data/sections/` | inline `Item N.` headings; 92% detected, graceful "Other" fallback |
 | 5 | chunk | `src/pipeline/chunk.py` | `data/chunks/` | recursive splitting **within** sections (parent→child) |
 | 6 | enrich | `src/pipeline/enrich.py` | `data/chunks/` | `embed_text` = `Company (Ticker) \| Filing \| Year \| Quarter \| Section` + text (idempotent) |
-| 7 | embed | `src/pipeline/embed.py` | `data/embeddings/` | OpenAI `text-embedding-3-large`, batched + cached |
+| 7 | embed | `src/pipeline/embed.py` | `data/embeddings/` | local `BAAI/bge-large-en-v1.5` (sentence-transformers), batched + cached |
 | 8 | store | `src/pipeline/store.py` | `data/vectorstore/` | Chroma upsert (idempotent) + BM25 |
 
 Orchestrator: `src/run.py`. Inspection: `src/inspect.py`. Corpus spike: `scripts/inspect_corpus.py`.
@@ -83,7 +84,7 @@ Orchestrator: `src/run.py`. Inspection: `src/inspect.py`. Corpus spike: `scripts
 | evidence | `evidence_builder.py` | `[E1..]` grounding blocks + citation tags |
 | guardrails | `guardrails.py` | coverage · diversity · min-similarity · cite-or-refuse |
 | prompt | `prompt_builder.py` | system (cite-or-refuse) + evidence + question, token-budgeted, versioned |
-| **generate** | `src/generation/generate.py` | **the single Claude call** (structured output) |
+| **generate** | `src/generation/generate.py` | **the single LLM call** — GPT via OpenRouter (structured output) |
 | parse/cite | `response_parser.py`, `citation_mapper.py` | structured answer + resolved citations |
 
 Orchestrator: `src/retrieval/retrieval_pipeline.py` (`run_query`). Serving: `src/api/main.py`
@@ -91,11 +92,11 @@ Orchestrator: `src/retrieval/retrieval_pipeline.py` (`run_query`). Serving: `src
 
 ## Stack
 
-Python 3.11+ · **LangChain** (`RecursiveCharacterTextSplitter`, `OpenAIEmbeddings`, Chroma retriever,
-`PromptTemplate`, `ChatAnthropic` structured output — infrastructure only, no Chains/Agents) ·
-`chromadb` · `rank-bm25` · embeddings **OpenAI `text-embedding-3-large`** (behind an `Embedder`
-protocol) · generation **Claude `claude-opus-4-8`** (single structured call) · cross-encoder
-reranker `sentence-transformers` (optional, lazy, identity fallback) · **FastAPI** + **Streamlit** ·
+Python 3.11+ · **LangChain** (`RecursiveCharacterTextSplitter`, Chroma retriever, `PromptTemplate`,
+`ChatOpenAI` structured output — infrastructure only, no Chains/Agents) · `chromadb` · `rank-bm25` ·
+embeddings **local `BAAI/bge-large-en-v1.5`** (`sentence-transformers`, behind an `Embedder`
+protocol) · reranker **local `BAAI/bge-reranker-base`** (`-large` optional; identity fallback) ·
+generation **`openai/gpt-4o` via OpenRouter** (single structured call) · **FastAPI** + **Streamlit** ·
 `pydantic-settings` · `pytest`.
 
 ## Getting the corpus
@@ -109,11 +110,11 @@ The dataset (246 `.txt` filings + `manifest.json`, ~79 MB) is **not** committed.
 ```bash
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # add OPENAI_API_KEY (embeddings) and ANTHROPIC_API_KEY (Phase 2)
+cp .env.example .env        # add OPENROUTER_API_KEY (the single answer call); embeddings are local
 
 # Build the index (all 8 stages, in order, idempotent)
 python -m src.run --stage all          # or: python scripts/build_index.py
-#   Stages 1–6 are deterministic and need no key; stage 7 (embed) needs OPENAI_API_KEY.
+#   All 8 stages run locally with NO API key (embeddings are local bge); needs sentence-transformers.
 
 # Inspect any stage — counts, samples, and sanity checks over the whole pipeline
 python -m src.inspect
@@ -141,8 +142,8 @@ returns a grounded refusal rather than crashing.
 ### Docker
 
 ```bash
-python -m src.run --stage all     # 1. build the index (needs OPENAI_API_KEY)
-cp .env.example .env              # 2. add your keys
+python -m src.run --stage all     # 1. build the index locally (no key; needs sentence-transformers)
+cp .env.example .env              # 2. add OPENROUTER_API_KEY (the single answer call)
 docker compose up --build         # 3. serve the API at http://localhost:8000/docs
 ```
 

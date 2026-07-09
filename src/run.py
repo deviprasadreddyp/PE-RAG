@@ -8,7 +8,8 @@
 Stages run in order: ingest -> clean -> metadata -> sections -> chunk -> enrich
 -> embed -> store. Each is idempotent and resumable: a stage is skipped when its
 output artifact is already current (newer than its inputs), unless --force.
-``embed`` needs OPENAI_API_KEY; earlier stages are deterministic and key-free.
+All stages run locally with no API key (embeddings are the local bge model); ``embed`` just needs
+``sentence-transformers`` installed.
 """
 
 from __future__ import annotations
@@ -138,7 +139,7 @@ def main(argv=None) -> int:
     except ImportError:
         print("Pipeline: install deps first (pip install -r requirements.txt).")
         return 1
-    except RuntimeError as exc:                          # e.g. embed needs OPENAI_API_KEY
+    except RuntimeError as exc:
         print(f"Pipeline: {exc}")
         return 1
     for name in STAGE_NAMES:

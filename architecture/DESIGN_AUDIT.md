@@ -16,7 +16,7 @@ Audit of the current codebase (commits through `docs: ingestion README`) against
   **controlled-normalization** design with typed records, incremental indexing, canonical sections +
   Part tree, and semantic-hierarchical max-cap chunking.
 - The remaining gaps are **all of Phase 2** (retrieval, fusion, single LLM call, debug UI) and the
-  **real embed/store runs** (need `OPENAI_API_KEY` + compute).
+  **real embed/store runs** (need `sentence-transformers` + compute; embeddings are local, no key).
 
 ---
 
@@ -203,9 +203,10 @@ removes only the leading machine blob + isolated tag lines. Verified: 0/246 file
 8. **Typed `Document` and `EmbeddingRecord`** models — `embed.py` persists `list[EmbeddingRecord]`. (commit `c93b1c1`)
 9. **Chroma record `hash`** — `Chunk.content_hash = sha256(text)` flows to Chroma metadata
    (`created_at` intentionally omitted for determinism). (commit `b241f4c`)
-10. **Collection name** — **Decision: model-namespaced** (`sec_filings__text-embedding-3-large`, via
-    `settings.collection_name`). Rationale: a model change ⇒ a fresh index, preventing dimension/space
-    mismatches between vectors from different models. Already implemented; decision recorded.
+10. **Collection name** — **Decision: model-namespaced** (e.g. `sec_filings__BAAI-bge-large-en-v1.5`,
+    via `settings.collection_name`). Rationale: a model change ⇒ a fresh index, preventing dimension/
+    space mismatches between vectors from different models (this is exactly what made the later switch
+    to bge embeddings a clean roll-over). Already implemented; decision recorded.
 11. **Project structure** — **Decision: keep the flat `src/` + `src/pipeline/` layout for the MVP;
     do NOT refactor into per-concern folders now.** Rationale: the pipeline is already a clean linear
     sequence of one module per stage; a package rename mid-build adds churn and import risk with no
@@ -223,8 +224,10 @@ or local ML; refusals make zero LLM calls.
 ### C. Phase 2 build — ✅ DONE
 12. **Retrieval** — validate → classify → extract → hard filter → plan → hybrid (vector+BM25) → RRF
     (k=60) → hydrate → rerank → dedup → evidence, in `src/retrieval/`. (P3–P12, P17)
-13. **Single Claude call** — `src/generation/generate.py` (LangChain ChatAnthropic, structured
-    output, one request); prompt builder cite-or-refuse + versioned. (P14, P15)
+13. **Single LLM call** — `src/generation/generate.py` (LangChain ChatOpenAI via OpenRouter,
+    structured output, one request); prompt builder cite-or-refuse + versioned. (P14, P15)
+    *Provider later switched from Claude to OpenAI-via-OpenRouter, and embeddings to local bge — see
+    ADR-013/014.*
 14. **Confidence score** — deterministic similarity bands in `guardrails.py`, overrides the model's. (P13)
 15. **Per-query logging** + **eval harness** — `query_log.py` (JSONL) + `src/eval/` (metrics + golden
     set: precision@k, recall@k, MRR, NDCG, citation coverage). (P18, P21)
@@ -235,7 +238,7 @@ Two spec deltas, both intentional: query logs are one JSONL (`data/logs/queries.
 per-file; the cross-encoder reranker ships as an optional dep with an identity fallback.
 
 ### D. Real runs — still deferred (need keys / compute, not code)
-18. **Real embed run** (`OPENAI_API_KEY`, ~32K chunks) → populate `data/embeddings/`.
+18. **Real embed run** (local bge, `sentence-transformers`, ~32K chunks) → populate `data/embeddings/`.
 19. **Real Chroma + BM25 build** (`python -m src.pipeline.store`) after #18.
-20. **Live eval** (`python -m src.eval.run_eval`) + live Claude answers (`ANTHROPIC_API_KEY`).
+20. **Live eval** (`python -m src.eval.run_eval`) + live answers (`OPENROUTER_API_KEY`).
 21. **Cross-encoder reranker** — `pip install sentence-transformers` to activate (else identity fallback).
