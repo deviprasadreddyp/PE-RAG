@@ -50,6 +50,31 @@ def load_previous(out_dir: Path) -> dict | None:
     return json.loads(p.read_text("utf-8")) if p.exists() else None
 
 
+# --- display helpers (pure; used by the Streamlit dashboard) ---------------------
+
+def dashboard_overview(report: dict) -> dict:
+    """The few headline numbers for the dashboard's top row."""
+    ret = (report.get("retrieval") or {}).get("summary") or {}
+    ab = (report.get("ab") or {}).get("summary") or {}
+    ragas = (report.get("ragas") or {}).get("summary") or {}
+    out: dict[str, float] = {}
+    for k in ("precision@k", "mrr", "ndcg@k", "company_recall"):
+        if k in ret:
+            out[k] = ret[k]
+    if ab.get("hybrid", {}).get("recall@k") is not None:
+        out["hybrid recall@k"] = ab["hybrid"]["recall@k"]
+    for k in ("faithfulness", "answer_relevancy"):
+        if ragas.get(k) is not None:
+            out[k] = ragas[k]
+    return out
+
+
+def ab_recall_by_mode(report: dict) -> dict:
+    """{strategy: recall@k} for the A/B bar chart."""
+    ab = (report.get("ab") or {}).get("summary") or {}
+    return {mode: m["recall@k"] for mode, m in ab.items() if "recall@k" in m}
+
+
 def _table(headers: list[str], rows: list[list]) -> str:
     head = "".join(f"<th>{html.escape(str(h))}</th>" for h in headers)
     body = "".join(

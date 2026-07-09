@@ -3,7 +3,8 @@
 import json
 
 from src.eval.report import (
-    build_html_report, compare_to_previous, flat_summary, load_previous, write_reports,
+    ab_recall_by_mode, build_html_report, compare_to_previous, dashboard_overview,
+    flat_summary, load_previous, write_reports,
 )
 from src.eval.run_eval import assemble_report
 
@@ -56,3 +57,10 @@ def test_write_and_load_reports(tmp_path):
     assert loaded["ab"]["summary"]["hybrid"]["recall@k"] == 0.9
     assert "<h1>PE-RAG" in (tmp_path / "eval_report.html").read_text("utf-8")
     assert load_previous(tmp_path / "nonexistent") is None
+
+
+def test_dashboard_display_helpers():
+    r = _report()
+    ov = dashboard_overview(r)
+    assert ov["precision@k"] == 0.75 and ov["hybrid recall@k"] == 0.9 and ov["faithfulness"] == 0.95
+    assert ab_recall_by_mode(r) == {"bm25": 0.6, "vector": 0.7, "hybrid": 0.9}
