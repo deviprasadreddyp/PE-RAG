@@ -1,6 +1,6 @@
 """P21 tests: ranking + citation metrics, relevance judgment, per-case scoring, aggregation, golden set."""
 
-from src.eval import metrics
+from src.eval import metrics, relevance
 from src.eval.run_eval import aggregate, evaluate_case, is_relevant, load_eval_set
 from src.retrieval.retrieval_pipeline import PipelineResult
 from src.schemas import Answer, Chunk, Citation, DocMetadata, Evidence
@@ -83,6 +83,15 @@ def test_aggregate_means():
 
 def test_golden_set_loads():
     cases = load_eval_set()
-    assert len(cases) >= 6
-    assert all("question" in c for c in cases)
-    assert any(c.get("expect_refusal") for c in cases)                    # includes an out-of-corpus case
+    assert len(cases) >= 20                                               # ~25 representative questions
+    assert all("question" in c and "id" in c for c in cases)
+    assert any(c.get("expect_refusal") for c in cases)                    # includes out-of-corpus cases
+    assert len({c["id"] for c in cases}) == len(cases)                    # ids unique
+
+
+def test_relevance_by_chunk_id_and_pooled_recall():
+    c = _chunk("AAPL", 2024, "Risk Factors")
+    assert relevance.is_relevant(c, {"expected_chunk_ids": [c.id]})       # exact-id ground truth
+    assert not relevance.is_relevant(c, {"expected_chunk_ids": ["other"]})
+    assert relevance.company_recall([c], {"companies": ["AAPL", "TSLA"]}) == 0.5
+    assert metrics != relevance                                           # both modules import cleanly

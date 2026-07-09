@@ -17,10 +17,9 @@ import json
 from pathlib import Path
 
 from src.config import settings
-from src.eval import metrics
-from src.schemas import Chunk
+from src.eval import metrics, relevance
 
-_EVAL_SET = Path(__file__).with_name("eval_set.jsonl")
+_EVAL_SET = Path(__file__).parent / "datasets" / "golden.jsonl"
 
 
 def load_eval_set(path: str | Path | None = None) -> list[dict]:
@@ -28,17 +27,8 @@ def load_eval_set(path: str | Path | None = None) -> list[dict]:
     return [json.loads(ln) for ln in p.read_text("utf-8").splitlines() if ln.strip()]
 
 
-def is_relevant(chunk: Chunk, expected: dict) -> bool:
-    """Metadata-based relevance judgment for one retrieved chunk."""
-    if expected.get("companies") and chunk.ticker not in expected["companies"]:
-        return False
-    if expected.get("years") and chunk.year not in expected["years"]:
-        return False
-    if expected.get("forms") and chunk.form not in expected["forms"]:
-        return False
-    if expected.get("sections") and chunk.section not in expected["sections"]:
-        return False
-    return True
+# re-exported for callers/tests that used run_eval.is_relevant
+is_relevant = relevance.is_relevant
 
 
 def evaluate_case(result, expected: dict, *, k: int | None = None) -> dict:
@@ -49,21 +39,18 @@ def evaluate_case(result, expected: dict, *, k: int | None = None) -> dict:
         return {"refused": result.refused, "refusal_correct": float(result.refused)}
 
     evidence = result.evidence or []
-    relevance = [1 if is_relevant(e.chunk, expected) else 0 for e in evidence]
+    chunks = [e.chunk for e in evidence]
+    flags = relevance.relevance_flags(chunks, expected)
     evidence_ids = [e.evidence_id for e in evidence]
     cited_ids = [e.evidence_id for e in _cited_evidence(result)]
-    # company-recall proxy: fraction of requested companies present in the evidence
-    want = set(expected.get("companies") or [])
-    got = {e.chunk.ticker for e in evidence}
-    company_recall = len(want & got) / len(want) if want else 0.0
 
     return {
         "refused": result.refused,
-        "precision@k": metrics.precision_at_k(relevance, k),
-        "hit@k": metrics.hit_at_k(relevance, k),
-        "mrr": metrics.reciprocal_rank(relevance),
-        "ndcg@k": metrics.ndcg_at_k(relevance, k),
-        "company_recall": company_recall,
+        "precision@k": metrics.precision_at_k(flags, k),
+        "hit@k": metrics.hit_at_k(flags, k),
+        "mrr": metrics.reciprocal_rank(flags),
+        "ndcg@k": metrics.ndcg_at_k(flags, k),
+        "company_recall": relevance.company_recall(chunks, expected),
         "citation_groundedness": metrics.citation_groundedness(cited_ids, evidence_ids),
         "citation_coverage": metrics.citation_coverage(cited_ids, evidence_ids),
     }

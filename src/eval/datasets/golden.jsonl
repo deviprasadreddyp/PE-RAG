@@ -1,0 +1,25 @@
+{"id": "q01", "question": "What are Apple's primary risk factors?", "companies": ["AAPL"], "sections": ["Risk Factors"]}
+{"id": "q02", "question": "Compare Apple and Tesla risk factors", "companies": ["AAPL", "TSLA"], "sections": ["Risk Factors"]}
+{"id": "q03", "question": "What was Microsoft's revenue and operating margin?", "companies": ["MSFT"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
+{"id": "q04", "question": "How has NVIDIA's revenue changed over recent years?", "companies": ["NVDA"], "sections": ["Management's Discussion and Analysis", "Financial Statements and Supplementary Data"]}
+{"id": "q05", "question": "What risks did JPMorgan disclose in its 2024 10-K?", "companies": ["JPM"], "years": [2024], "forms": ["10-K"], "sections": ["Risk Factors"]}
+{"id": "q06", "question": "Summarize Amazon's business segments", "companies": ["AMZN"], "sections": ["Business"]}
+{"id": "q07", "question": "Compare Exxon and Chevron capital expenditure", "companies": ["XOM", "CVX"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q08", "question": "What legal proceedings is Johnson & Johnson involved in?", "companies": ["JNJ"], "sections": ["Legal Proceedings"]}
+{"id": "q09", "question": "Describe Boeing's key operational risks", "companies": ["BA"], "sections": ["Risk Factors"]}
+{"id": "q10", "question": "What was Alphabet's advertising revenue?", "companies": ["GOOG"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
+{"id": "q11", "question": "How does Costco describe its membership business model?", "companies": ["COST"], "sections": ["Business", "Management's Discussion and Analysis"]}
+{"id": "q12", "question": "Compare JPMorgan and Goldman Sachs regulatory risks", "companies": ["JPM", "GS"], "sections": ["Risk Factors"]}
+{"id": "q13", "question": "What is Meta's outlook on user growth and monetization?", "companies": ["META"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q14", "question": "Summarize Pfizer's pipeline and product risks", "companies": ["PFE"], "sections": ["Business", "Risk Factors"]}
+{"id": "q15", "question": "How has AMD's data center segment performed?", "companies": ["AMD"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q16", "question": "Compare Coca-Cola and PepsiCo net revenue", "companies": ["KO", "PEP"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
+{"id": "q17", "question": "What are Walmart's liquidity and cash flow trends?", "companies": ["WMT"], "sections": ["Management's Discussion and Analysis", "Financial Statements and Supplementary Data"]}
+{"id": "q18", "question": "Describe Disney's streaming business and its risks", "companies": ["DIS"], "sections": ["Business", "Risk Factors"]}
+{"id": "q19", "question": "What cybersecurity risks does Microsoft disclose?", "companies": ["MSFT"], "sections": ["Risk Factors", "Cybersecurity"]}
+{"id": "q20", "question": "How does Caterpillar describe demand across its segments?", "companies": ["CAT"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q21", "question": "Compare Eli Lilly and Pfizer research and development spending", "companies": ["LLY", "PFE"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
+{"id": "q22", "question": "What was Netflix's subscriber and revenue growth?", "companies": ["NFLX"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q23", "question": "Summarize Home Depot's capital allocation and dividends", "companies": ["HD"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q24", "question": "What is the capital of France?", "companies": [], "expect_refusal": true}
+{"id": "q25", "question": "Give me a Bitcoin price prediction for next year", "companies": [], "expect_refusal": true}

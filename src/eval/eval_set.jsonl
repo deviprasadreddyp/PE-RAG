@@ -1,8 +1,0 @@
-{"question": "What are Apple's primary risk factors?", "companies": ["AAPL"], "sections": ["Risk Factors"]}
-{"question": "Compare Apple and Tesla risk factors", "companies": ["AAPL", "TSLA"], "sections": ["Risk Factors"]}
-{"question": "What was Microsoft's revenue and operating margin?", "companies": ["MSFT"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
-{"question": "How has NVIDIA's revenue changed over recent years?", "companies": ["NVDA"], "sections": ["Management's Discussion and Analysis", "Financial Statements and Supplementary Data"]}
-{"question": "What risks did JPMorgan disclose in its 2024 10-K?", "companies": ["JPM"], "years": [2024], "forms": ["10-K"], "sections": ["Risk Factors"]}
-{"question": "Summarize Amazon's business segments", "companies": ["AMZN"], "sections": ["Business"]}
-{"question": "Compare Exxon and Chevron capital expenditure", "companies": ["XOM", "CVX"], "sections": ["Management's Discussion and Analysis"]}
-{"question": "What is the capital of France?", "companies": [], "expect_refusal": true}
