@@ -1,0 +1,15 @@
+# PE-RAG — run the FastAPI service with the built index + keys mounted in.
+#   1. build the index:  python -m src.run --stage all   (needs OPENAI_API_KEY)
+#   2. cp .env.example .env  and fill in the keys
+#   3. docker compose up --build   ->  http://localhost:8000/docs
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data                 # the built Chroma + BM25 index (read at query time)
+      - ./edgar_corpus:/app/edgar_corpus # corpus (for health/inspection)
+    restart: unless-stopped

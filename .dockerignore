@@ -1,0 +1,27 @@
+# Keep the build context (and image) lean — code + requirements only.
+.git/
+.gitignore
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Secrets never enter the image (passed via env at runtime)
+.env
+.env.*
+
+# Runtime data + corpus are mounted at runtime, not baked in
+data/
+edgar_corpus/*
+!edgar_corpus/manifest.json
+
+# Not needed to run the service
+tests/
+architecture/
+templates/
+skills/
+evals/
+prompt_iterations/
+*.md

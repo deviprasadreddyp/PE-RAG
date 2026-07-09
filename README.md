@@ -138,6 +138,18 @@ python -m src.eval.run_eval                 # writes data/logs/eval_report.json
 Both need the index built (stages 7–8) and the relevant API key; without them the pipeline
 returns a grounded refusal rather than crashing.
 
+### Docker
+
+```bash
+python -m src.run --stage all     # 1. build the index (needs OPENAI_API_KEY)
+cp .env.example .env              # 2. add your keys
+docker compose up --build         # 3. serve the API at http://localhost:8000/docs
+```
+
+The image contains only code + deps (`sentence-transformers` stays optional, so it's lean); the
+built index (`data/`) and corpus are mounted at runtime and keys come from `.env`. A `HEALTHCHECK`
+hits `/health`.
+
 ### Useful commands
 
 ```bash
