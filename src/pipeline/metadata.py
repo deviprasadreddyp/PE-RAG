@@ -16,6 +16,7 @@ import re
 from src.observability import list_artifacts, load_artifact, persist_artifact, run_docs
 from src.pipeline.clean import split_header_body
 from src.pipeline.ingest import FILENAME, SUFFIX
+from src.reference import sector_for
 from src.schemas import DocMetadata
 
 
@@ -62,6 +63,8 @@ def build_metadata(doc_id: str, raw: str) -> DocMetadata:
     fn = parse_filename(doc_id)
 
     ticker = h.get("Ticker") or fn.get("ticker", "")
+    # We keep the field name `form` (used across filters, citations, tests). The header
+    # labels it "Filing Type"; we normalize its value to exactly "10-K" / "10-Q".
     form = normalize_form(h.get("Filing Type", "")) or normalize_form(fn.get("form", ""))
     filing_date = h.get("Filing Date") or fn.get("date", "")
     report_period = h.get("Report Period", "")
@@ -79,6 +82,9 @@ def build_metadata(doc_id: str, raw: str) -> DocMetadata:
         cik=h.get("CIK", ""),
         source_url=h.get("URL", ""),
         source_file=doc_id + SUFFIX,
+        document_id=doc_id,                          # stable filing id (== chunk.doc_id)
+        source=h.get("Source") or "SEC EDGAR",       # provenance from the header
+        industry=sector_for(ticker),                 # curated GICS sector ("" if unknown)
     )
 
 

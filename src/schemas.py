@@ -31,6 +31,9 @@ class DocMetadata(_Base):
     quarter: str = ""               # e.g. "Q3" ("" for a full-year 10-K without one)
     cik: str = ""
     source_url: str = ""
+    document_id: str = ""           # stable filing id (== Chunk.doc_id); carried from Stage 3 on
+    source: str = "SEC EDGAR"       # provenance, read from the filing header ("Source:")
+    industry: str = ""              # GICS sector (curated reference table; "" if unknown)
 
 
 class SectionSpan(_Base):

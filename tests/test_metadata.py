@@ -26,6 +26,17 @@ def test_full_header_extraction():
     assert m.fiscal_period == "2022Q3" and m.quarter == "Q3" and m.year == 2022
     assert m.cik == "0000320193" and m.source_url == "https://www.sec.gov/x"
     assert m.source_file == "AAPL_10K_2022Q3_2022-10-28_full.txt"
+    # B4 fields: stable id, header provenance, curated sector
+    assert m.document_id == "AAPL_10K_2022Q3_2022-10-28"
+    assert m.source == "SEC EDGAR"
+    assert m.industry == "Information Technology"
+
+
+def test_source_defaults_and_industry_unknown_ticker():
+    header = "Company: Zzz Corp\nTicker: ZZZ\nFiling Type: 10-K\nFiling Date: 2024-01-01\n"  # no Source
+    m = build_metadata("ZZZ_10K_2024-01-01", _raw(header))
+    assert m.source == "SEC EDGAR"                       # default when header omits it
+    assert m.industry == ""                              # unknown ticker -> never guessed
 
 
 def test_header_wins_over_filename():
