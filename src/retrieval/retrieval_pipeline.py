@@ -14,13 +14,14 @@ debug UI (P19/P20).
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 from src.config import settings
 from src.generation import generate as gen_mod
 from src.retrieval import (
     bm25_retriever, deduplicator, evidence_builder, guardrails, hybrid_fusion,
-    metadata_filter, metadata_parser, prompt_builder, query_validator,
+    metadata_filter, metadata_parser, prompt_builder, query_log, query_validator,
     reranker as rerank_mod, response_parser, retrieval_planner, vector_retriever,
 )
 from src.schemas import Answer, Evidence, GuardrailResult, QueryAnalysis, RetrievalResult
@@ -135,3 +136,15 @@ def answer_query(query: str, *, store=None, index=None, embedder=None, reranker=
     retrieved = [RetrievalResult(chunk=e.chunk, score=e.score) for e in kept]
     answer = response_parser.build_answer(body, kept, retrieved=retrieved, usage={})
     return PipelineResult(answer=answer, analysis=qa, guardrail=gr, evidence=kept, trace=trace)
+
+
+def run_query(query: str, *, log: bool = True, base=None, **kwargs) -> PipelineResult:
+    """Timed wrapper around ``answer_query`` that also writes a query log (Stage 17)."""
+    start = time.perf_counter()
+    result = answer_query(query, **kwargs)
+    latency = time.perf_counter() - start
+    if log:
+        record = query_log.build_log_record(result, latency_s=latency,
+                                             usage=result.answer.usage if result.answer else {})
+        query_log.write_log(record, base=base)
+    return result
