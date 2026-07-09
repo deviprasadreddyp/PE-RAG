@@ -1,12 +1,15 @@
-"""Stage 5 — chunk generation (within sections).
+"""Stage 5 — chunk generation: Section-Aware Hierarchical Chunking.
 
-Slice the cleaned text by each detected ``SectionSpan`` and split every section
-independently with LangChain's ``RecursiveCharacterTextSplitter`` (chunk_size /
-chunk_overlap from config; separators favour paragraph -> line -> sentence ->
-word, hard-splitting only as a last resort). Chunks therefore never span two
-sections. Each ``Chunk`` gets a stable id ``"{doc_id}_{index}"``, its section
-name, and the full filing metadata (``embed_text`` is filled in Stage 6).
-Persist to ``data/chunks/<doc_id>.json``. Deterministic; no LLM.
+Strategy (see architecture/CHUNKING_STRATEGY.md): the filing's detected sections
+(Stage 4) are the semantic hierarchy — the *parents*. We split each section
+independently into retrieval-sized *child* chunks with LangChain's
+``RecursiveCharacterTextSplitter`` (a boundary-preserving splitter: paragraph ->
+line -> sentence -> word, hard-splitting only as a last resort). Chunks therefore
+never span two sections. Each ``Chunk`` records its place in the hierarchy
+(``section_index`` = which parent, ``section_chunk_index`` = position within it,
+``chunk_index`` = global order), a stable id ``"{doc_id}_{index}"``, and the full
+filing metadata (``embed_text`` is filled in Stage 6). Persist to
+``data/chunks/<doc_id>.json``. Deterministic; no LLM.
 
 Run standalone:  python -m src.pipeline.chunk
 """
@@ -39,8 +42,9 @@ def chunk_document(
     splitter = splitter or make_splitter()
     out: list[Chunk] = []
     idx = 0
-    for span in sections:
-        for piece in splitter.split_text(cleaned[span.start:span.end]):
+    for section_index, span in enumerate(sections):          # parent nodes
+        section_chunk_index = 0
+        for piece in splitter.split_text(cleaned[span.start:span.end]):   # children within the parent
             piece = piece.strip()
             if not piece:
                 continue
@@ -51,10 +55,13 @@ def chunk_document(
                     doc_id=doc_id,
                     chunk_index=idx,
                     section=span.section_name,
+                    section_index=section_index,
+                    section_chunk_index=section_chunk_index,
                     text=piece,
                 )
             )
             idx += 1
+            section_chunk_index += 1
     return out
 
 

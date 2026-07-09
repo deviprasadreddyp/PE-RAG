@@ -50,6 +50,17 @@ def test_full_metadata_and_chroma_safe():
     assert c.embed_text == ""                                     # filled later in Stage 6
 
 
+def test_hierarchy_indices_parent_and_child():
+    cs = _chunks()
+    biz = [c for c in cs if c.section == "Business"]
+    risk = [c for c in cs if c.section == "Risk Factors"]
+    assert all(c.section_index == 0 for c in biz)                 # parent 0
+    assert all(c.section_index == 1 for c in risk)                # parent 1
+    assert [c.section_chunk_index for c in biz] == list(range(len(biz)))    # child index resets
+    assert [c.section_chunk_index for c in risk] == list(range(len(risk)))
+    assert [c.chunk_index for c in cs] == list(range(len(cs)))    # global index contiguous
+
+
 def test_empty_section_produces_no_chunks():
     assert chunk_document("D", META, "   ", [SectionSpan(section_name="Other", item="", start=0, end=3)],
                           splitter=SPLIT) == []

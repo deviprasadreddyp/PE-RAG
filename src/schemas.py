@@ -53,8 +53,10 @@ class Chunk(DocMetadata):
 
     id: str                         # stable, unique: "{doc_id}_{chunk_index}"
     doc_id: str                     # e.g. "AAPL_10K_2024"
-    chunk_index: int
-    section: str                    # section this chunk came from
+    chunk_index: int                # 0-based position in the whole document
+    section: str                    # parent section this chunk came from
+    section_index: int = 0          # 0-based index of the parent section (hierarchy: which section)
+    section_chunk_index: int = 0    # 0-based position of this chunk WITHIN its section (child index)
     text: str                       # original text (for display + citation)
     embed_text: str = ""            # enriched text actually embedded (set in Stage 6)
 
@@ -68,6 +70,8 @@ class Chunk(DocMetadata):
         chunk_index: int,
         section: str,
         text: str,
+        section_index: int = 0,
+        section_chunk_index: int = 0,
         embed_text: str = "",
     ) -> "Chunk":
         return cls(
@@ -75,6 +79,8 @@ class Chunk(DocMetadata):
             doc_id=doc_id,
             chunk_index=chunk_index,
             section=section,
+            section_index=section_index,
+            section_chunk_index=section_chunk_index,
             text=text,
             embed_text=embed_text,
             **meta.model_dump(),
