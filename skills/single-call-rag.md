@@ -3,7 +3,7 @@
 **Purpose.** Produce the final answer from **exactly one Claude API request** with the retrieved
 context injected. This is the assessment's hard constraint and non-negotiable rule #1.
 
-**When to invoke.** Work in `sec_rag/generation/answer.py` — the one place the answer is generated.
+**When to invoke.** Work in `src/generation/answer.py` — the one place the answer is generated.
 
 > Consult the installed **`claude-api`** skill for exact model IDs, params, and the single-call
 > pattern before writing this. Do not code the API call from memory.

@@ -4,7 +4,7 @@
 fit the token budget, dedupe near-duplicates, tag each chunk with a citation label, and never
 silently truncate the best chunk.
 
-**When to invoke.** Work in `sec_rag/retrieval/context.py`.
+**When to invoke.** Work in `src/retrieval/context.py`.
 
 ## How to do it
 1. **Order best-first** (by rerank score). The model attends best to what's clearly delimited and

@@ -3,7 +3,7 @@
 **Purpose.** Define and version the grounded, cite-or-refuse prompt used in the single call, and keep
 the iteration log the assessment requires.
 
-**When to invoke.** Work in `sec_rag/generation/prompt.py`; any change to prompt wording.
+**When to invoke.** Work in `src/generation/prompt.py`; any change to prompt wording.
 
 ## The template (structure)
 Keep the system prompt stable (for caching) and put context + question in the user turn.
@@ -29,10 +29,10 @@ USER (per query):
 - **Delimit context clearly** (`<context>…</context>`) and instruct "use only the context" — this is
   also the defense against prompt injection in filing text (`answer-grounding`).
 - **Version it.** `PROMPT_VERSION = "vN"` constant in `prompt.py`. Every change bumps it and appends
-  to `prompts/CHANGELOG.md`: what changed, why, and the effect on the eval metrics.
+  to `prompt_iterations/CHANGELOG.md`: what changed, why, and the effect on the eval metrics.
 - **Iterate against the eval set,** not one example. Change one thing at a time (`skills/evaluation`).
 
-## prompts/CHANGELOG.md entry format
+## prompt_iterations/CHANGELOG.md entry format
 ```
 ## v3 — 2026-07-09
 Changed: added "preserve units and fiscal periods exactly" line.
@@ -62,6 +62,6 @@ def build_user_turn(context: str, question: str) -> str:
 - No "preserve numbers/units/period" line → figures get rounded or units dropped.
 
 ## MUST NOT
-- MUST NOT ship a prompt change without a `prompts/CHANGELOG.md` entry.
+- MUST NOT ship a prompt change without a `prompt_iterations/CHANGELOG.md` entry.
 - MUST NOT omit the grounding + cite-or-refuse instructions.
 - MUST NOT tune the prompt on a single anecdote instead of the eval set.

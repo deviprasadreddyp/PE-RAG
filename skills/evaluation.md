@@ -4,10 +4,10 @@
 embedding / retrieval / prompt change must be justified by a metric on a fixed set. This is also the
 "how you evaluated quality" deliverable.
 
-**When to invoke.** Work in `sec_rag/eval/`; before claiming any change improved the system.
+**When to invoke.** Work in `src/eval/`; before claiming any change improved the system.
 
 ## How to do it
-1. **Build a labeled eval set first** (`sec_rag/eval/eval_set.jsonl`): 20–50+ questions spanning the
+1. **Build a labeled eval set first** (`src/eval/eval_set.jsonl`): 20–50+ questions spanning the
    real query types — single-company lookup, cross-company comparison, cross-period trend, sector,
    and **unanswerable** (must refuse). For each: the expected supporting filing(s)/section and the
    expected answer facts (exact figures + units + period). Version it.
@@ -35,7 +35,7 @@ print(res.answer)          # eyeballed once, declared "working"
 ## Good example
 ```python
 def evaluate(cfg):
-    rows = [json.loads(l) for l in open("sec_rag/eval/eval_set.jsonl")]
+    rows = [json.loads(l) for l in open("src/eval/eval_set.jsonl")]
     by_type = defaultdict(lambda: {"recall": [], "faithful": [], "numeric": [], "refusal": []})
     for r in rows:
         hits = retrieve(r["question"])

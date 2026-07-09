@@ -1,66 +1,65 @@
 # Skill: document-ingestion
 
-**Purpose.** Load SEC filings from `edgar_corpus/`, read the metadata header, and strip the XBRL
-noise blob before any chunking or embedding.
+**Purpose.** Stage 1. Read every SEC filing from `edgar_corpus/`, validate it, read the metadata
+header, and persist the raw, unmodified document to `data/raw/`. Cleaning is a **separate** stage
+(`document-cleaning`) — ingestion does not modify content.
 
-**When to invoke.** Any work in `sec_rag/ingest/loader.py` or `parser.py`; anything that reads the
-corpus.
+**When to invoke.** Work in `src/pipeline/ingest.py`.
 
 ## Corpus facts
 - `edgar_corpus/` holds 246 `.txt` filings + `manifest.json`. `manifest.json` is a dict with
   `corpus`, `description`, `file_count`, `filing_types` (`{"10-K": 89, "10-Q": 157}`), and `files`
-  (a list of filenames). Use it as the authoritative file list — do not glob blindly.
-- Filename: `TICKER_FORM_[PERIOD]_YYYY-MM-DD_full.txt` (e.g. `AAPL_10K_2022Q3_2022-10-28_full.txt`).
-  `PERIOD` (e.g. `2024Q3`) is present on most but NOT all files (`AAPL_10K_2025-10-31_full.txt`).
+  (the authoritative filename list — iterate this, don't glob blindly).
+- Filename: `TICKER_FORM_[PERIOD]_YYYY-MM-DD_full.txt`. `PERIOD` (e.g. `2024Q3`) is present on most
+  but NOT all files.
 - Each file: a **metadata header** (`Company:`, `Ticker:`, `Filing Type:`, `Filing Date:`,
-  `Report Period:`, `Quarter:`, `CIK:`, `Source:`, `URL:`) then a line of `====`, then the body.
-- **The body opens with a large XBRL / us-gaap tag blob** — a wall of
-  `0000320193us-gaap:CommonStock...` machine data — before the human-readable filing that begins
-  around `UNITED STATESSECURITIES AND EXCHANGE COMMISSION...` / `FORM 10-K`.
+  `Report Period:`, `Quarter:`, `CIK:`, `Source:`, `URL:`) then a `====` line, then the body (which
+  opens with a large XBRL/us-gaap blob — that gets removed in the cleaning stage, not here).
 
 ## How to do it
-1. Read the file list from `manifest.json`. For each file, split on the `====` separator into
-   `header` and `body`.
-2. Parse the header line-by-line into a metadata dict (`skills/metadata-schema`). Trust the header
-   over the filename; use the filename only to cross-check and to backfill a missing period.
-3. **Strip the XBRL blob:** detect the leading run of concatenated `us-gaap:`/`srt:`/`<ticker>:` tags
-   and CIK-date sequences and drop it. Anchor on the first real prose marker
-   (`"UNITED STATES", "SECURITIES AND EXCHANGE COMMISSION", "FORM 10-"`) and keep from there.
-4. Return `(metadata, clean_body)` for the chunker. Never pass raw body downstream.
+1. Read the file list from `manifest.json`. Validate each file: exists, UTF-8 decodable, filename
+   matches the expected pattern. Send failures to a dead-letter list with the reason — never drop
+   silently.
+2. Split on `====` into `header` and `body`. Keep both; do NOT strip the XBRL blob here (that's
+   `document-cleaning`).
+3. Persist the raw document to `data/raw/<doc_id>.txt` via `persist_artifact` (`observability`).
+   `doc_id` = a stable id derived from the filename, e.g. `AAPL_10K_2024`.
+4. Hand the header to `metadata-schema` for deterministic metadata extraction (a separate stage).
 
 ## Bad example
 ```python
-# BAD: globs the dir, embeds the whole file including the XBRL blob, ignores the header
-for path in glob.glob("edgar_corpus/*.txt"):
-    text = open(path).read()
-    ticker = path.split("_")[0]          # loses period, cik, url; wrong for odd filenames
-    chunks = split(text)                 # XBRL tag soup goes straight into the index
+# BAD: globs, cleans + chunks inline, persists nothing, derives metadata from filename only
+for p in glob.glob("edgar_corpus/*.txt"):
+    text = strip_everything(open(p).read())   # cleaning mixed into ingestion, nothing saved
+    chunks = split(text)                        # no data/raw artifact to inspect later
 ```
 
 ## Good example
 ```python
 import json, re
-SEP = "=" * 60
-PROSE_ANCHOR = re.compile(r"UNITED STATES\s*SECURITIES AND EXCHANGE COMMISSION|FORM 10-[KQ]", re.I)
+from src.observability import persist_artifact
+PAT = re.compile(r"^(?P<ticker>[A-Z]+)_(?P<form>10[KQ])_.*\.txt$")
 
-def load(path: str) -> tuple[dict, str]:
-    raw = open(path, encoding="utf-8").read()
-    header, _, body = raw.partition(SEP)
-    meta = parse_header(header)                      # -> ticker, company, form, period, cik, url...
-    m = PROSE_ANCHOR.search(body)
-    clean = body[m.start():] if m else body          # drop the leading XBRL blob
-    return meta, clean
+def run_ingest():
+    manifest = json.load(open("edgar_corpus/manifest.json", encoding="utf-8"))
+    dead = []
+    for fname in manifest["files"]:
+        if not PAT.match(fname): dead.append((fname, "bad filename")); continue
+        try: raw = open(f"edgar_corpus/{fname}", encoding="utf-8").read()
+        except UnicodeDecodeError: dead.append((fname, "encoding")); continue
+        doc_id = fname.replace("_full.txt", "")
+        persist_artifact("raw", doc_id, raw, ext="txt")   # inspectable, unmodified
+    if dead: persist_artifact("raw", "_dead_letter", dead)
 ```
 
-## Failure modes seen (guard against these)
-- Tool globs the corpus and ignores `manifest.json` → misses that file names are authoritative.
-- Tool derives all metadata from the filename → drops `period` on filenames without it, and gets
-  CIK/URL wrong. **Read the header.**
-- Tool embeds the XBRL blob → retrieval returns tag soup, cost balloons, answers degrade.
-- Tool assumes every file has a `Quarter:` line — some 10-Ks don't; handle missing fields.
+## Failure modes seen
+- Globbing instead of using `manifest.json` (the authoritative list).
+- Cleaning/chunking mixed into ingestion → no raw artifact, no separation of stages.
+- Silently skipping a filing on error → data loss with no record.
+- Deriving metadata from the filename here → drops period on odd filenames (see `metadata-schema`).
 
 ## MUST NOT
-- MUST NOT embed, index, or chunk the XBRL/us-gaap blob.
-- MUST NOT trust the filename over the header for metadata.
-- MUST NOT write into `edgar_corpus/` — it is read-only.
-- MUST NOT drop a filing silently on a parse error — send it to a dead-letter list with the reason.
+- MUST NOT modify content in this stage (no XBRL strip, no whitespace collapse) — persist raw as-is.
+- MUST NOT skip persistence — `data/raw/` must contain every ingested filing.
+- MUST NOT write into `edgar_corpus/` (read-only).
+- MUST NOT drop a filing silently — dead-letter it with the reason.

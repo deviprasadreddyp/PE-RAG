@@ -31,7 +31,7 @@ It is deliberately over-constrained. Predictability is the feature.
    - create `features/active/<name>/`,
    - instantiate and fill the three templates by reading the relevant skills,
    - build the implementation plan phase by phase, following the conventions,
-   - log any prompt change in `prompts/CHANGELOG.md`.
+   - log any prompt change in `prompt_iterations/CHANGELOG.md`.
 5. **You should not have to babysit it or answer ten clarifying questions.** If you do, the harness
    needs a sharper skill or rule — fix that, don't just fix the code.
 
@@ -72,9 +72,9 @@ filter, makes two LLM calls, or asks what vector store to use — the harness ne
 | Assessment deliverable | Where it lives |
 |---|---|
 | README with setup/run | `README.md` (generated per `skills/frontend-streamlit` + build plan) |
-| Indexing & retrieval code | `sec_rag/ingest/`, `sec_rag/index/`, `sec_rag/retrieval/`, `scripts/build_index.py` |
-| Prompt iteration log | `prompts/CHANGELOG.md` |
-| Final prompt template | `sec_rag/generation/prompt.py` |
-| Front-end | `app.py` (Streamlit) |
+| Indexing & retrieval code | `src/ingest/`, `src/index/`, `src/retrieval/`, `scripts/build_index.py` |
+| Prompt iteration log | `prompt_iterations/CHANGELOG.md` |
+| Final prompt template | `src/generation/prompt.py` |
+| Front-end | `frontend/app.py` (Streamlit) |
 | Example request | `evals/case-01-.../prompt.md` (and README quick-start) |
-| Quality evaluation notes | `evals/` + `sec_rag/eval/` |
+| Quality evaluation notes | `evals/` + `src/eval/` |

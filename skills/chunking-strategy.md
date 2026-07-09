@@ -4,7 +4,7 @@
 self-contained enough to answer, with fiscal metadata on every chunk. Chunking silently determines
 retrieval quality — get it right here.
 
-**When to invoke.** Work in `sec_rag/ingest/chunker.py`; tuning chunk size/overlap.
+**When to invoke.** Work in `src/ingest/chunker.py`; tuning chunk size/overlap.
 
 ## How to do it (SEC-specific)
 1. **Clean first.** Input is the XBRL-stripped body from `document-ingestion`. Never chunk raw text.

@@ -3,7 +3,7 @@
 **Purpose.** Turn chunks and queries into vectors: which model, how to batch, how to cache, and how
 to keep query and document embeddings consistent.
 
-**When to invoke.** Work in `sec_rag/index/embedder.py`; any embedding call.
+**When to invoke.** Work in `src/index/embedder.py`; any embedding call.
 
 ## How to do it
 1. **Model.** Default to Voyage **`voyage-finance-2`** (finance-domain, 1024-dim) — the corpus is

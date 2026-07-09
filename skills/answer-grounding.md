@@ -4,7 +4,7 @@
 exact figures/units/periods, refuse when the context can't support an answer, and cite every claim.
 For a PE client, a wrong number is worse than "I don't know."
 
-**When to invoke.** Work in `sec_rag/generation/answer.py`, `prompt.py`, and evaluation of answers.
+**When to invoke.** Work in `src/generation/answer.py`, `prompt.py`, and evaluation of answers.
 
 ## How to do it
 1. **Grounding is instruction + verification.** The prompt says "use only the context" (`prompt-

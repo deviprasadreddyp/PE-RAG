@@ -4,7 +4,7 @@
 question, the grounded answer, its sources, the retrieved chunks (for transparency), and
 latency/cost. Built for a live client-style demo.
 
-**When to invoke.** Work in `app.py`.
+**When to invoke.** Work in `frontend/app.py`.
 
 ## How to do it
 1. **Input.** A single `st.text_input`/`st.text_area` for the business question + a "Run" button, and
@@ -32,7 +32,7 @@ if st.button("Go"):
 ## Good example
 ```python
 import streamlit as st, time
-from sec_rag.generation.answer import answer
+from src.generation.answer import answer
 
 @st.cache_resource
 def pipeline(): return load_pipeline()      # store + embedder loaded once

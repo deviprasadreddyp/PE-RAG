@@ -13,7 +13,7 @@
 - Maps it to a Chroma `where` clause on `fiscal_period` (the existing metadata field — **no re-index
   needed**; no new chunk field, or if one is added, the plan calls for a re-index and version bump).
 - Filters on `fiscal_period`, not `filing_date`; handles fiscal ≠ calendar year.
-- Lives in `sec_rag/retrieval/` (query parsing / `retriever.py`), depends on the `VectorStore`
+- Lives in `src/retrieval/` (query parsing / `retriever.py`), depends on the `VectorStore`
   protocol — no direct Chroma coupling in business logic.
 - Adds unit tests (range parsing, where-clause construction) and a retrieval test on the eval set.
 

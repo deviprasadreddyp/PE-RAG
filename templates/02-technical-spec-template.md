@@ -13,7 +13,7 @@ List the `skills/*.md` that govern this work (e.g. `chunking-strategy`, `hybrid-
 `single-call-rag`). Read them before designing. Note any place you must deviate — and why.
 
 ## Components touched / added
-For each module (`sec_rag/ingest|index|retrieval|generation`, `app.py`, `scripts/`):
+For each module (`src/ingest|index|retrieval|generation`, `frontend/app.py`, `scripts/`):
 - **Module:** what it does, what it owns, what it must NOT own.
 - **New vs modified.**
 

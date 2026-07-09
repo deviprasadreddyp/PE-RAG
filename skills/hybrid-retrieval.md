@@ -4,7 +4,7 @@
 sparse (BM25) search fused with RRF → rerank → top-k. Retrieval quality caps the whole system; if
 the right chunk isn't retrieved, no prompt can save the answer.
 
-**When to invoke.** Work in `sec_rag/retrieval/retriever.py`.
+**When to invoke.** Work in `src/retrieval/retriever.py`.
 
 ## How to do it
 1. **Metadata pre-filter first** (`skills/metadata-schema`). When the question names a company / form

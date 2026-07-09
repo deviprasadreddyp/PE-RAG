@@ -5,7 +5,7 @@ that answers a natural-language **business question** and returns a **structured
 answer produced by a single LLM API call** — built for a private-equity use case.
 
 > **Status:** this repo currently contains the **build harness** (see below). The application
-> pipeline (`sec_rag/`) and the Streamlit front-end (`app.py`) are built *using* the harness.
+> pipeline (`src/`) and the Streamlit front-end (`frontend/app.py`) are built *using* the harness.
 
 ## The one hard rule
 
@@ -24,9 +24,9 @@ DESIGN_DOC.md        ← what the harness is and how to use it
 templates/           ← the feature workflow: product spec → tech spec → implementation plan
 skills/              ← opinionated how-tos (ingestion, chunking, retrieval, the single call, …)
 evals/               ← proof the harness works: rebuild a feature, compare to expected
-prompts/CHANGELOG.md ← the prompt iteration log
-sec_rag/             ← application code (ingest / index / retrieval / generation / eval) — built via the harness
-app.py               ← Streamlit front-end — built via the harness
+prompt_iterations/CHANGELOG.md ← the prompt iteration log
+src/             ← application code (ingest / index / retrieval / generation / eval) — built via the harness
+frontend/app.py               ← Streamlit front-end — built via the harness
 edgar_corpus/        ← dataset (git-ignored; only manifest.json is tracked — see below)
 ```
 
@@ -58,7 +58,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 cp .env.example .env        # add ANTHROPIC_API_KEY (and optional VOYAGE_API_KEY)
 python scripts/build_index.py   # one-time offline indexing
-streamlit run app.py            # launch the demo front-end
+streamlit run frontend/app.py            # launch the demo front-end
 ```
 
 ## Example question
