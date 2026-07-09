@@ -21,12 +21,18 @@ where the data drove it, the source is cited.
   Structural Parsing* split — tracked as an open decision in `DESIGN_AUDIT.md` (Part A).
 
 ## Chunking
-- **Dataset-driven size:** fixed **3000-char / 300-overlap** window, split **within** sections. The
-  filings have ~no blank-line paragraphs (median 1/filing), so paragraph chunking isn't viable; size
-  is char-based (not token-based) and is a starting point to be tuned by the retrieval eval.
+- **Semantic hierarchy, not fixed size:** sections are the semantic unit (parents); within each
+  section the recursive splitter packs boundary-preserving pieces **up to a MAX cap** of
+  **3000 chars / 300 overlap**. The cap is a *ceiling, not a target* — short sections stay whole
+  (one small chunk), long ones split only at real boundaries. Verified on the corpus: ~98% of a
+  filing's chunks land **below** the cap (avg ~2300 chars), which is the signature of variable,
+  content-driven sizing rather than a fixed window.
+- **Char-based cap** (~750 tokens, not token-based): the filings have ~no blank-line paragraphs
+  (median 1/filing), so paragraph chunking isn't viable; the cap is a starting point tuned by eval.
 - **Section-aware hierarchy:** sections are parents, chunks are children; each chunk records
-  `section_index` and `section_chunk_index`. Section detection is best-effort (92% of filings) with a
-  graceful "Other" fallback so nothing is lost.
+  `section_index` and `section_chunk_index`, plus a `content_hash` (sha256 of its text) for
+  content-addressed dedup. Section detection is best-effort (92% of filings), canonicalized to the
+  standard SEC names + Part tree for 10-K, with a graceful "Other" fallback so nothing is lost.
 
 ## Identity, determinism, idempotency
 - **Chunk IDs are deterministic and section-aware** (`{doc_id}__{Section}_c{NN}`), not random UUIDs —

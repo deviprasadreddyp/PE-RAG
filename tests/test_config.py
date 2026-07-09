@@ -8,7 +8,7 @@ from src.config import Settings
 
 _ENVS = (
     "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY",
-    "CHUNK_SIZE", "CHUNK_OVERLAP", "EMBEDDING_MODEL", "GENERATION_MODEL",
+    "CHUNK_MAX_CHARS", "CHUNK_OVERLAP", "EMBEDDING_MODEL", "GENERATION_MODEL",
 )
 
 
@@ -28,7 +28,7 @@ def test_defaults():
     s = _mk()
     assert s.embedding_model == "text-embedding-3-large"
     assert s.generation_model == "claude-opus-4-8"
-    assert s.chunk_size > s.chunk_overlap >= 0
+    assert s.chunk_max_chars > s.chunk_overlap >= 0
     assert s.data_dir == "data"
     assert s.corpus_dir == "edgar_corpus"
 
@@ -41,20 +41,20 @@ def test_collection_name_includes_embedding_model():
 
 def test_env_loading(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
-    monkeypatch.setenv("CHUNK_SIZE", "512")
+    monkeypatch.setenv("CHUNK_MAX_CHARS", "512")
     s = _mk()
     assert s.openai_api_key.get_secret_value() == "sk-openai-test"
-    assert s.chunk_size == 512
+    assert s.chunk_max_chars == 512
 
 
 def test_kwarg_override():
-    s = _mk(chunk_size=200, chunk_overlap=20)
-    assert (s.chunk_size, s.chunk_overlap) == (200, 20)
+    s = _mk(chunk_max_chars=200, chunk_overlap=20)
+    assert (s.chunk_max_chars, s.chunk_overlap) == (200, 20)
 
 
 def test_overlap_must_be_less_than_size():
     with pytest.raises(ValueError):
-        _mk(chunk_size=100, chunk_overlap=100)
+        _mk(chunk_max_chars=100, chunk_overlap=100)
 
 
 def test_secret_not_exposed_in_repr():

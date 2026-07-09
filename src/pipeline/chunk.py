@@ -17,6 +17,7 @@ Run standalone:  python -m src.pipeline.chunk
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -36,8 +37,10 @@ def _slug(section_name: str) -> str:
 
 
 def make_splitter(chunk_size: int | None = None, chunk_overlap: int | None = None):
+    # LangChain's chunk_size IS a maximum: it packs pieces up to the cap, so small
+    # sections yield one short chunk and only long sections split. Default = settings cap.
     return RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size or settings.chunk_size,
+        chunk_size=chunk_size or settings.chunk_max_chars,
         chunk_overlap=chunk_overlap or settings.chunk_overlap,
         separators=SEPARATORS,
         keep_separator=True,
@@ -70,6 +73,7 @@ def chunk_document(
                     meta, id=cid, doc_id=doc_id, chunk_index=idx,
                     section=span.section_name, section_index=section_index,
                     section_chunk_index=section_chunk_index, text=piece,
+                    content_hash=hashlib.sha256(piece.encode("utf-8")).hexdigest(),
                 )
             )
             idx += 1

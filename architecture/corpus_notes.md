@@ -34,6 +34,6 @@ Re-generate with `python scripts/inspect_corpus.py` (idempotent — no timestamp
 - Line lengths (chars): p50 69, p90 198, p99 4474 over 266,500 non-blank lines (long lines are tables/aligned rows).
 
 ## Decision — chunking (characters; RecursiveCharacterTextSplitter)
-- **chunk_size = 3000**, **chunk_overlap = 300** (~10%).
-- Rationale: because blank-line paragraph structure is essentially absent, we cannot chunk on paragraphs. Instead use a fixed character window (~750 tokens at ~4 chars/token) with the recursive separator hierarchy `['\n\n', '\n', '. ', ' ', '']`, splitting **within** detected sections (Stage 4) and never across them. 3000 chars is large enough to carry a table plus its surrounding narrative, small enough to rank precisely; 300-char overlap preserves cross-boundary context. These are a starting point — validated/tuned later by the retrieval eval.
+- **chunk_max_chars = 3000** (per-chunk MAX cap, not a fixed size), **chunk_overlap = 300** (~10%).
+- Rationale: because blank-line paragraph structure is essentially absent, we cannot chunk on paragraphs. Instead the recursive separator hierarchy `['\n\n', '\n', '. ', ' ', '']` packs boundary-preserving pieces **up to** a 3000-char ceiling (~750 tokens at ~4 chars/token), splitting **within** detected sections (Stage 4) and never across them. The cap is a *ceiling, not a target*: short sections stay whole (one small chunk) and only long sections split — on the corpus ~98% of a filing's chunks land below the cap (avg ~2300 chars). 3000 chars is large enough to carry a table plus its surrounding narrative, small enough to rank precisely; 300-char overlap preserves cross-boundary context. These are a starting point — validated/tuned later by the retrieval eval.
 

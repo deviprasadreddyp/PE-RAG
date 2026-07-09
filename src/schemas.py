@@ -63,6 +63,7 @@ class Chunk(DocMetadata):
     section_chunk_index: int = 0    # 0-based position of this chunk WITHIN its section (child index)
     text: str                       # original text (for display + citation)
     embed_text: str = ""            # enriched text actually embedded (set in Stage 6)
+    content_hash: str = ""          # sha256 of `text` — content-addressed dedup / change detection
 
     @classmethod
     def from_metadata(
@@ -77,6 +78,7 @@ class Chunk(DocMetadata):
         section_index: int = 0,
         section_chunk_index: int = 0,
         embed_text: str = "",
+        content_hash: str = "",
     ) -> "Chunk":
         return cls(
             id=id,
@@ -87,6 +89,7 @@ class Chunk(DocMetadata):
             section_chunk_index=section_chunk_index,
             text=text,
             embed_text=embed_text,
+            content_hash=content_hash,
             **meta.model_dump(),
         )
 

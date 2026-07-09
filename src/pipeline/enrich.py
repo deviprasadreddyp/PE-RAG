@@ -1,10 +1,10 @@
 """Stage 6 — chunk enrichment.
 
-Before embedding, prepend each chunk's parent context (company, filing type,
-year, section) to produce ``embed_text``. This gives the embedding model richer
-semantic context while the original ``text`` is preserved verbatim for display
-and citations. Deterministic and idempotent — ``embed_text`` is always derived
-from ``text``, so re-running never stacks headers. Re-persist in place to
+Before embedding, prepend each chunk's parent context (company, ticker, filing
+type, year, quarter, section) to produce ``embed_text``. This gives the embedding
+model richer semantic context while the original ``text`` is preserved verbatim
+for display and citations. Deterministic and idempotent — ``embed_text`` is always
+derived from ``text``, so re-running never stacks headers. Re-persist in place to
 ``data/chunks/<doc_id>.json``.
 
 Run standalone:  python -m src.pipeline.enrich
@@ -27,9 +27,10 @@ def _year(chunk: Chunk) -> str:
 
 
 def enrich_text(chunk: Chunk) -> str:
+    quarter = chunk.quarter or "FY"                  # "FY" for a full-year 10-K (no quarter)
     header = (
-        f"Company: {chunk.company} | Filing: {chunk.form} | "
-        f"Year: {_year(chunk)} | Section: {chunk.section}"
+        f"Company: {chunk.company} ({chunk.ticker}) | Filing: {chunk.form} | "
+        f"Year: {_year(chunk)} | Quarter: {quarter} | Section: {chunk.section}"
     )
     return f"{header}{SEP}{chunk.text}"
 

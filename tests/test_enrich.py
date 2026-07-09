@@ -6,14 +6,17 @@ from src.observability import load_artifact, persist_artifact
 from src.pipeline.enrich import SEP, enrich_chunk, enrich_text, run_enrich
 from src.schemas import Chunk, DocMetadata
 
-HEADER = re.compile(r"^Company: .+ \| Filing: .+ \| Year: .+ \| Section: .+$")
+HEADER = re.compile(
+    r"^Company: .+ \(.+\) \| Filing: .+ \| Year: .+ \| Quarter: .+ \| Section: .+$"
+)
 
 
 def _chunk(section="Risk Factors", text="Supply chain risk.", year=2022,
-           fiscal="2022Q3", fdate="2022-10-28", i=0) -> Chunk:
+           fiscal="2022Q3", fdate="2022-10-28", quarter="Q3", i=0) -> Chunk:
     return Chunk.from_metadata(
         DocMetadata(company="Apple Inc", ticker="AAPL", form="10-K", filing_date=fdate,
-                    source_file="AAPL_10K_2024_full.txt", fiscal_period=fiscal, year=year),
+                    source_file="AAPL_10K_2024_full.txt", fiscal_period=fiscal, year=year,
+                    quarter=quarter),
         id=f"AAPL_10K_2024_{i}", doc_id="AAPL_10K_2024", chunk_index=i, section=section, text=text,
     )
 
@@ -27,9 +30,15 @@ def test_original_text_unchanged():
 def test_embed_text_shape():
     e = enrich_chunk(_chunk())
     assert e.embed_text.startswith(
-        "Company: Apple Inc | Filing: 10-K | Year: 2022 | Section: Risk Factors"
+        "Company: Apple Inc (AAPL) | Filing: 10-K | Year: 2022 | Quarter: Q3 | Section: Risk Factors"
     )
     assert SEP in e.embed_text and e.embed_text.endswith("Supply chain risk.")
+
+
+def test_full_year_quarter_is_fy():
+    # a 10-K with no quarter shows "Quarter: FY"
+    e = enrich_text(_chunk(fiscal="", year=2025, fdate="2025-10-31", quarter=""))
+    assert "Quarter: FY" in e
 
 
 def test_header_format_identical_across_chunks():
@@ -49,7 +58,7 @@ def test_idempotent_no_stacked_header():
 
 def test_year_fallback():
     assert enrich_text(_chunk(year=0, fiscal="2023Q2")).startswith(
-        "Company: Apple Inc | Filing: 10-K | Year: 2023"
+        "Company: Apple Inc (AAPL) | Filing: 10-K | Year: 2023"
     )
     assert "Year: 2025" in enrich_text(_chunk(year=0, fiscal="", fdate="2025-10-31"))
 

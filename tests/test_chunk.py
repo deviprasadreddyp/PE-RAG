@@ -48,6 +48,24 @@ def test_sizes_within_bound():
     assert all(len(c.text) <= 120 for c in _chunks())
 
 
+def test_chunk_size_is_a_max_cap_not_fixed():
+    # semantic-hierarchical: a section well under the cap stays ONE short chunk
+    # (the cap is a ceiling, not a fixed target — nothing is padded to 120 chars)
+    small = "Short section body."
+    secs = [SectionSpan(section_name="Business", item="Item 1", start=0, end=len(small))]
+    cs = chunk_document("D", META, small, secs, splitter=SPLIT)
+    assert len(cs) == 1
+    assert len(cs[0].text) < 120                                 # size follows content, not the cap
+
+
+def test_content_hash_is_sha256_of_text():
+    import hashlib
+
+    for c in _chunks():
+        assert len(c.content_hash) == 64
+        assert c.content_hash == hashlib.sha256(c.text.encode("utf-8")).hexdigest()
+
+
 def test_full_metadata_and_chroma_safe():
     c = _chunks()[0]
     assert c.ticker == "AAPL" and c.form == "10-K" and c.fiscal_period == "2022Q3"

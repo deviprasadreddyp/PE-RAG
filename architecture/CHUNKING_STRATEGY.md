@@ -25,7 +25,10 @@ Every chunk carries: company · filing type · fiscal year/quarter · **section 
 ## Two stages
 
 1. **Section detection (hierarchy creation)** — `src/pipeline/sections.py` (Stage 4). Detect the
-   filing's natural item boundaries. Each section becomes a parent node with character offsets.
+   filing's natural item boundaries. Each section becomes a parent node with character offsets, then
+   is **canonicalized**: for 10-K its title is normalized to the standard SEC name and its parent
+   `part` (Part I–IV) is filled from the fixed 10-K structure (grouping by `part` reconstructs the
+   section tree). 10-Q keeps its detected title (item numbers repeat across Parts — we don't guess).
    Nothing is chunked yet; we have simply understood the structure. (92% of the corpus parses; the
    rest fall back to a single "Other" parent so nothing is lost.)
 
@@ -34,13 +37,19 @@ Every chunk carries: company · filing type · fiscal year/quarter · **section 
    character in order, so it keeps "Revenue increased because…" together instead of cutting it into
    "Revenue increased" / "because…". A chunk is never `end-of-Business + start-of-Risk-Factors`.
 
+   **Size is a MAX cap, not a fixed target.** `chunk_max_chars` (default 3000) is a *ceiling*: the
+   recursive splitter packs boundary-preserving pieces up to that limit, so a short section stays a
+   single small chunk and only long sections split. On the corpus, ~98% of a filing's chunks land
+   *below* the cap (avg ~2300 chars) — the signature of variable, content-driven sizing. Each chunk
+   also records a `content_hash` (sha256 of its text) for content-addressed dedup / change detection.
+
 ## Enrichment (Stage 6)
 
 Before embedding, each chunk is prefixed with its parent context so the embedding carries the
 business concept, while the original `text` is preserved for display and citation:
 
 ```
-Company: Apple | Filing: 10-K | Year: 2024 | Section: Risk Factors
+Company: Apple Inc (AAPL) | Filing: 10-K | Year: 2024 | Quarter: FY | Section: Risk Factors
 ---
 <chunk text>
 ```

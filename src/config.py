@@ -39,10 +39,12 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     generation_model: str = "claude-opus-4-8"
 
-    # --- Chunking (characters; dataset-driven, see architecture/corpus_notes.md) ---
-    # Filings have ~no blank-line paragraphs, so we chunk on a fixed char window
-    # (~750 tokens) within detected sections. Starting point; tuned by the retrieval eval.
-    chunk_size: int = Field(3000, gt=0)
+    # --- Chunking: Section-Aware Hierarchical Chunking (see architecture/CHUNKING_STRATEGY.md) ---
+    # Sections are the semantic unit (the parents). WITHIN each section the recursive splitter
+    # packs boundary-preserving pieces UP TO a MAXIMUM size — this is a ceiling, NOT a fixed
+    # target: short sections stay whole (one small chunk); long ones split only at real
+    # boundaries. Char-based (~750 tokens; filings have ~no blank-line paragraphs). Tuned by eval.
+    chunk_max_chars: int = Field(3000, gt=0)     # per-chunk MAX cap, not a fixed size
     chunk_overlap: int = Field(300, ge=0)
 
     # --- Retrieval (Phase 2) ---
@@ -62,9 +64,10 @@ class Settings(BaseSettings):
     # --- Validation ---
     @model_validator(mode="after")
     def _overlap_lt_size(self) -> "Settings":
-        if self.chunk_overlap >= self.chunk_size:
+        if self.chunk_overlap >= self.chunk_max_chars:
             raise ValueError(
-                f"chunk_overlap ({self.chunk_overlap}) must be < chunk_size ({self.chunk_size})"
+                f"chunk_overlap ({self.chunk_overlap}) must be < chunk_max_chars "
+                f"({self.chunk_max_chars})"
             )
         return self
 
