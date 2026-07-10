@@ -14,6 +14,13 @@ from __future__ import annotations
 from src.schemas import HardFilter, QueryAnalysis
 
 
+def fiscal_period_aliases(qa: QueryAnalysis) -> list[str]:
+    """Build fiscal-period aliases such as 2023Q4 from explicit year+quarter mentions."""
+    if not qa.years or not qa.quarters:
+        return []
+    return [f"{year}{quarter}" for year in qa.years for quarter in qa.quarters]
+
+
 def build_filter(qa: QueryAnalysis) -> HardFilter:
     """QueryAnalysis -> HardFilter (company/year/quarter/form only)."""
     return HardFilter(
@@ -21,6 +28,7 @@ def build_filter(qa: QueryAnalysis) -> HardFilter:
         years=qa.years,
         quarters=qa.quarters,
         forms=qa.forms,
+        fiscal_periods=fiscal_period_aliases(qa),
     )
 
 
@@ -33,6 +41,8 @@ def describe(f: HardFilter) -> str:
         parts.append("year IN [" + ", ".join(str(y) for y in f.years) + "]")
     if f.quarters:
         parts.append("quarter IN [" + ", ".join(f.quarters) + "]")
+    if f.fiscal_periods:
+        parts.append("fiscal_period IN [" + ", ".join(f.fiscal_periods) + "]")
     if f.forms:
         parts.append("form IN [" + ", ".join(f.forms) + "]")
     return " AND ".join(parts) if parts else "(no hard filter — search all filings)"

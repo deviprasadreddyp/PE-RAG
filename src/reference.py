@@ -105,6 +105,23 @@ def canonical_section_name(form: str, item: str, fallback: str = "") -> str:
         name = SEC_10K_ITEM_NAMES.get(item)
         if name:
             return name
+    low = fallback.lower()
+    if "risk factor" in low:
+        return "Risk Factors"
+    if "legal proceeding" in low:
+        return "Legal Proceedings"
+    if "management" in low and "analysis" in low:
+        return "Management's Discussion and Analysis"
+    if "financial statement" in low:
+        return "Financial Statements and Supplementary Data"
+    if "market risk" in low:
+        return "Quantitative and Qualitative Disclosures About Market Risk"
+    if "control" in low and "procedure" in low:
+        return "Controls and Procedures"
+    if "exhibit" in low:
+        return "Exhibits"
+    if low.strip() == "business":
+        return "Business"
     return fallback
 
 
@@ -128,31 +145,68 @@ def part_for_10k_item(item: str) -> str:
 # "cat" -> CAT) are NOT false-matched from lowercase prose (users type COST/CAT).
 
 _COMPANY_NAMES: dict[str, str] = {
-    "apple": "AAPL", "abbvie": "ABBV", "adobe": "ADBE",
-    "amd": "AMD", "advanced micro devices": "AMD", "amazon": "AMZN",
-    "american express": "AXP", "amex": "AXP", "boeing": "BA",
-    "bank of america": "BAC", "blackrock": "BLK",
-    "berkshire": "BRK", "berkshire hathaway": "BRK", "caterpillar": "CAT",
-    "comcast": "CMCSA", "costco": "COST", "salesforce": "CRM", "cisco": "CSCO",
-    "chevron": "CVX", "deere": "DE", "john deere": "DE", "disney": "DIS",
-    "walt disney": "DIS", "general electric": "GE", "ge aerospace": "GE",
-    "google": "GOOG", "alphabet": "GOOG", "goldman sachs": "GS", "goldman": "GS",
-    "home depot": "HD", "ibm": "IBM", "international business machines": "IBM",
-    "intel": "INTC", "johnson & johnson": "JNJ", "johnson and johnson": "JNJ",
-    "j&j": "JNJ", "jpmorgan": "JPM", "jp morgan": "JPM", "jpmorgan chase": "JPM",
-    "coca-cola": "KO", "coca cola": "KO", "coke": "KO", "eli lilly": "LLY",
-    "lilly": "LLY", "lockheed": "LMT", "lockheed martin": "LMT", "mastercard": "MA",
-    "mcdonald's": "MCD", "mcdonalds": "MCD", "meta": "META", "facebook": "META",
-    "merck": "MRK", "morgan stanley": "MS", "microsoft": "MSFT", "netflix": "NFLX",
-    "nike": "NKE", "nvidia": "NVDA", "oracle": "ORCL", "pepsi": "PEP",
-    "pepsico": "PEP", "pfizer": "PFE", "procter & gamble": "PG",
-    "procter and gamble": "PG", "p&g": "PG", "raytheon": "RTX", "starbucks": "SBUX",
-    "at&t": "T", "target": "TGT", "thermo fisher": "TMO",
-    "thermo fisher scientific": "TMO", "tesla": "TSLA", "unitedhealth": "UNH",
-    "united health": "UNH", "unitedhealth group": "UNH", "united parcel service": "UPS",
-    "visa": "V", "verizon": "VZ", "walmart": "WMT", "wal-mart": "WMT",
+    "apple": "AAPL", "apple inc": "AAPL",
+    "abbvie": "ABBV", "abbvie inc": "ABBV",
+    "adobe": "ADBE", "adobe inc": "ADBE",
+    "amd": "AMD", "advanced micro devices": "AMD", "advanced micro devices inc": "AMD",
+    "amazon": "AMZN", "amazon.com": "AMZN", "amazon.com inc": "AMZN",
+    "american express": "AXP", "amex": "AXP",
+    "boeing": "BA",
+    "bank of america": "BAC",
+    "blackrock": "BLK",
+    "berkshire": "BRK", "berkshire hathaway": "BRK",
+    "caterpillar": "CAT",
+    "comcast": "CMCSA",
+    "costco": "COST",
+    "salesforce": "CRM",
+    "cisco": "CSCO",
+    "chevron": "CVX",
+    "deere": "DE", "john deere": "DE",
+    "disney": "DIS", "walt disney": "DIS",
+    "general electric": "GE", "ge aerospace": "GE",
+    "google": "GOOG", "alphabet": "GOOG", "alphabet inc": "GOOG",
+    "goldman sachs": "GS", "goldman": "GS",
+    "home depot": "HD",
+    "ibm": "IBM", "international business machines": "IBM",
+    "intel": "INTC", "intel corporation": "INTC",
+    "johnson & johnson": "JNJ", "johnson and johnson": "JNJ", "j&j": "JNJ",
+    "jpmorgan": "JPM", "jp morgan": "JPM", "j.p. morgan": "JPM",
+    "jpmorgan chase": "JPM", "jpmorgan chase & co": "JPM", "jpmorgan chase and co": "JPM",
+    "coca-cola": "KO", "coca cola": "KO", "coke": "KO",
+    "eli lilly": "LLY", "eli lilly and company": "LLY", "lilly": "LLY",
+    "lockheed": "LMT", "lockheed martin": "LMT",
+    "mastercard": "MA",
+    "mcdonald's": "MCD", "mcdonalds": "MCD",
+    "meta": "META", "facebook": "META",
+    "merck": "MRK", "merck & co": "MRK", "merck and co": "MRK",
+    "morgan stanley": "MS",
+    "microsoft": "MSFT", "microsoft corporation": "MSFT",
+    "netflix": "NFLX",
+    "nike": "NKE",
+    "nvidia": "NVDA", "nvidia corporation": "NVDA",
+    "oracle": "ORCL",
+    "pepsi": "PEP", "pepsico": "PEP",
+    "pfizer": "PFE", "pfizer inc": "PFE",
+    "procter & gamble": "PG", "procter and gamble": "PG", "p&g": "PG",
+    "raytheon": "RTX",
+    "starbucks": "SBUX",
+    "at&t": "T",
+    "target": "TGT",
+    "thermo fisher": "TMO", "thermo fisher scientific": "TMO",
+    "tesla": "TSLA", "tesla inc": "TSLA",
+    "unitedhealth": "UNH", "united health": "UNH", "unitedhealth group": "UNH",
+    "united parcel service": "UPS",
+    "visa": "V",
+    "verizon": "VZ",
+    "walmart": "WMT", "wal-mart": "WMT",
     "exxon": "XOM", "exxonmobil": "XOM", "exxon mobil": "XOM",
+    "exxon mobil corporation": "XOM",
 }
+
+_COMPANY_GROUPS: list[tuple[str, list[str]]] = [
+    (r"\b(?:major\s+)?(?:pharma|pharmaceutical|drugmaker|drug\s+maker)s?\b",
+     ["ABBV", "JNJ", "LLY", "MRK", "PFE"]),
+]
 
 # Uppercase ticker symbols matched as standalone tokens (case-sensitive), longest first.
 _UPPER_TICKERS: list[str] = sorted(
@@ -174,7 +228,15 @@ def match_companies(text: str) -> list[str]:
         m = _re.search(r"(?<![a-z0-9])" + _re.escape(alias) + r"(?![a-z0-9])", low)
         if m:
             _note(ticker, m.start())
-    # 2. uppercase ticker symbols — case-sensitive, standalone (avoids "cost"->COST etc.)
+
+    # 2. curated company groups, e.g. "major pharmaceutical companies"
+    for pattern, tickers in _COMPANY_GROUPS:
+        m = _re.search(pattern, low)
+        if m:
+            for offset, ticker in enumerate(tickers):
+                _note(ticker, m.start() + offset)
+
+    # 3. uppercase ticker symbols — case-sensitive, standalone (avoids "cost"->COST etc.)
     for t in _UPPER_TICKERS:
         m = _re.search(r"(?<![A-Za-z0-9])" + t + r"(?![A-Za-z0-9])", text)
         if m:

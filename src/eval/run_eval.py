@@ -83,6 +83,24 @@ def aggregate(rows: list[dict]) -> dict:
 _RETRIEVAL_KEYS = ("store", "index", "embedder", "reranker")
 
 
+def _default_retrieval_components(components: dict) -> dict:
+    """Fill missing retrieval components for the A/B harness and live eval path."""
+    out = dict(components)
+    if "store" not in out:
+        from src.pipeline.store import ChromaVectorStore
+        out["store"] = ChromaVectorStore()
+    if "index" not in out:
+        from src.pipeline.store import Bm25Index, _vectorstore_dir
+        out["index"] = Bm25Index.load(_vectorstore_dir() / "bm25.json")
+    if "embedder" not in out:
+        from src.pipeline.embed import get_embedder
+        out["embedder"] = get_embedder()
+    if "reranker" not in out:
+        from src.retrieval.reranker import get_reranker
+        out["reranker"] = get_reranker()
+    return out
+
+
 def assemble_report(rows: list[dict], *, ab: dict | None = None, ragas: dict | None = None) -> dict:
     """Combine per-case generation-path rows + optional A/B + RAGAS into one report (pure)."""
     return {"retrieval": {"cases": rows, "summary": aggregate(rows)}, "ab": ab, "ragas": ragas}
@@ -100,7 +118,10 @@ def run_eval(*, path=None, out_dir=None, k=None, run_ab=True, run_ragas_eval=Fal
 
     tracing.enable_langsmith()                                   # trace the answer calls if a key is set
     cases = load_eval_set(path)
-    ret_components = {k2: v for k2, v in components.items() if k2 in _RETRIEVAL_KEYS}
+    ret_components = _default_retrieval_components(
+        {k2: v for k2, v in components.items() if k2 in _RETRIEVAL_KEYS}
+    )
+    components = {**components, **ret_components}
 
     rows, ragas_rows = [], []
     for case in cases:
@@ -129,7 +150,7 @@ if __name__ == "__main__":
         r = run_eval()
     except (ImportError, RuntimeError, FileNotFoundError) as exc:
         print(f"Eval: cannot run yet ({type(exc).__name__}: {exc}). "
-              "Build the index (embed + store) and set OPENROUTER_API_KEY first.")
+              "Build the index (embed + store) and set OPENAI_API_KEY first.")
     else:
         print("Retrieval summary:", json.dumps(r["retrieval"]["summary"], indent=2))
         if r.get("ab"):

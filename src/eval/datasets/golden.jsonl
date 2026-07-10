@@ -2,7 +2,7 @@
 {"id": "q02", "question": "Compare Apple and Tesla risk factors", "companies": ["AAPL", "TSLA"], "sections": ["Risk Factors"]}
 {"id": "q03", "question": "What was Microsoft's revenue and operating margin?", "companies": ["MSFT"], "sections": ["Financial Statements and Supplementary Data", "Management's Discussion and Analysis"]}
 {"id": "q04", "question": "How has NVIDIA's revenue changed over recent years?", "companies": ["NVDA"], "sections": ["Management's Discussion and Analysis", "Financial Statements and Supplementary Data"]}
-{"id": "q05", "question": "What risks did JPMorgan disclose in its 2024 10-K?", "companies": ["JPM"], "years": [2024], "forms": ["10-K"], "sections": ["Risk Factors"]}
+{"id": "q05", "question": "What risks did JPMorgan disclose in its 2024 10-K?", "companies": ["JPM"], "years": [2024], "forms": ["10-K"], "sections": ["Risk Factors"], "expect_refusal": true}
 {"id": "q06", "question": "Summarize Amazon's business segments", "companies": ["AMZN"], "sections": ["Business"]}
 {"id": "q07", "question": "Compare Exxon and Chevron capital expenditure", "companies": ["XOM", "CVX"], "sections": ["Management's Discussion and Analysis"]}
 {"id": "q08", "question": "What legal proceedings is Johnson & Johnson involved in?", "companies": ["JNJ"], "sections": ["Legal Proceedings"]}
@@ -23,3 +23,28 @@
 {"id": "q23", "question": "Summarize Home Depot's capital allocation and dividends", "companies": ["HD"], "sections": ["Management's Discussion and Analysis"]}
 {"id": "q24", "question": "What is the capital of France?", "companies": [], "expect_refusal": true}
 {"id": "q25", "question": "Give me a Bitcoin price prediction for next year", "companies": [], "expect_refusal": true}
+{"id": "q26", "question": "Compare Microsoft, Amazon, and Alphabet cloud revenue and growth trends", "companies": ["MSFT", "AMZN", "GOOG"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q27", "question": "Compare Bank of America, JPMorgan, and Goldman Sachs liquidity and capital risks", "companies": ["BAC", "JPM", "GS"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q28", "question": "Compare Visa and Mastercard revenue drivers", "companies": ["V", "MA"], "sections": ["Business", "Management's Discussion and Analysis"]}
+{"id": "q29", "question": "What regulatory risks do UnitedHealth and Johnson & Johnson disclose?", "companies": ["UNH", "JNJ"], "sections": ["Risk Factors", "Legal Proceedings"]}
+{"id": "q30", "question": "Compare Merck and AbbVie product and pipeline risks", "companies": ["MRK", "ABBV"], "sections": ["Business", "Risk Factors"]}
+{"id": "q31", "question": "What manufacturing and technology risks does Intel disclose?", "companies": ["INTC"], "sections": ["Risk Factors", "Business"]}
+{"id": "q32", "question": "How does Salesforce describe subscription revenue trends?", "companies": ["CRM"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q33", "question": "What product and market risks does Cisco discuss?", "companies": ["CSCO"], "sections": ["Risk Factors", "Business"]}
+{"id": "q34", "question": "What does Oracle say about cloud revenue and growth outlook?", "companies": ["ORCL"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q35", "question": "What insurance and investment risks does Berkshire Hathaway disclose?", "companies": ["BRK"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q36", "question": "What credit and consumer spending risks does American Express disclose?", "companies": ["AXP"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q37", "question": "How does BlackRock discuss assets under management and market risk?", "companies": ["BLK"], "sections": ["Management's Discussion and Analysis", "Risk Factors"]}
+{"id": "q38", "question": "What defense program and government contract risks does Lockheed Martin disclose?", "companies": ["LMT"], "sections": ["Risk Factors", "Business"]}
+{"id": "q39", "question": "What supply chain and program risks does RTX disclose?", "companies": ["RTX"], "sections": ["Risk Factors", "Business"]}
+{"id": "q40", "question": "How does UPS describe volume and revenue trends?", "companies": ["UPS"], "sections": ["Management's Discussion and Analysis"]}
+{"id": "q41", "question": "What demand, inventory, and margin risks does Nike disclose?", "companies": ["NKE"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q42", "question": "How does Starbucks describe store growth and comparable sales trends?", "companies": ["SBUX"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q43", "question": "What inventory, shrink, and demand risks does Target disclose?", "companies": ["TGT"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q44", "question": "How does McDonald's describe its franchised restaurant business model?", "companies": ["MCD"], "sections": ["Business", "Management's Discussion and Analysis"]}
+{"id": "q45", "question": "What commodity, currency, and supply risks does Procter & Gamble disclose?", "companies": ["PG"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q46", "question": "What broadband, advertising, and media risks does Comcast discuss?", "companies": ["CMCSA"], "sections": ["Risk Factors", "Management's Discussion and Analysis"]}
+{"id": "q47", "question": "How does Verizon describe wireless service revenue trends?", "companies": ["VZ"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q48", "question": "What debt, cash flow, and capital allocation trends does AT&T discuss?", "companies": ["T"], "sections": ["Management's Discussion and Analysis", "Financial Statements and Supplementary Data"]}
+{"id": "q49", "question": "How does Thermo Fisher describe revenue demand and end-market trends?", "companies": ["TMO"], "sections": ["Management's Discussion and Analysis", "Business"]}
+{"id": "q50", "question": "Compare Exxon, Chevron, and Tesla climate and regulatory risks", "companies": ["XOM", "CVX", "TSLA"], "sections": ["Risk Factors"]}

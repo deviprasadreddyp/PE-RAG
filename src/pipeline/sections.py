@@ -33,7 +33,7 @@ from src.schemas import DocMetadata, SectionSpan
 
 # "Item" (opt nbsp) number+letter, opt '.'/')' , spaces/nbsp/pipe, then an Upper-cased title.
 # The pipe allows the "Item 1. | Financial Statements" layout some 10-Qs use.
-HEAD = re.compile(r"Item[ \t\xa0]*(\d+[A-Za-z]?)[.)]?[ \t\xa0|]+([A-Z][^\n\xa0|]{2,70})")
+HEAD = re.compile(r"(?i:Item)[ \t\xa0]*(\d+[A-Za-z]?)[.)]?[ \t\xa0|]+([A-Z][^\n\xa0|]{2,70})")
 MIN_SECTION_CHARS = 500          # a real section has a substantial body
 # words that, immediately before "Item", mark a cross-reference rather than a heading
 _CONNECTORS = {
@@ -47,8 +47,21 @@ def _norm_item(raw: str) -> str:
     return f"Item {int(m.group(1))}{m.group(2).upper()}" if m else f"Item {raw}"
 
 
+def _item_rank(item: str) -> int:
+    """Sortable 10-K item order: Item 1 < 1A < 1B < 2 < ..."""
+    m = re.match(r"Item (\d+)([A-Z]?)", item)
+    if not m:
+        return -1
+    letter = (ord(m.group(2)) - ord("A") + 1) if m.group(2) else 0
+    return int(m.group(1)) * 10 + letter
+
+
 def _clean_title(raw: str) -> str:
-    t = re.split(r"(?<=[a-z])(?=[A-Z])", raw, maxsplit=1)[0]     # cut camelCase bleed into body
+    t = re.split(
+        r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+        raw,
+        maxsplit=1,
+    )[0]                                                        # cut heading/body bleed
     t = re.sub(r"\s+", " ", t.replace("|", " ")).strip(" .:-)")
     t = re.sub(r"\s*\d+$", "", t).strip()                        # drop trailing page number
     return t if len(t) >= 3 and not t.isdigit() else ""
@@ -57,6 +70,21 @@ def _clean_title(raw: str) -> str:
 def _is_crossref(text: str, start: int) -> bool:
     toks = re.findall(r"[A-Za-z]+", text[max(0, start - 20):start])
     return bool(toks) and toks[-1].lower() in _CONNECTORS
+
+
+def _drop_backtracking_10k_items(
+    kept: list[tuple[int, str, str]]
+) -> list[tuple[int, str, str]]:
+    """Drop later duplicate/backward 10-K item hits, usually cross-references or exhibit lists."""
+    out: list[tuple[int, str, str]] = []
+    last = -1
+    for cand in kept:
+        rank = _item_rank(cand[1])
+        if rank <= last:
+            continue
+        out.append(cand)
+        last = rank
+    return out
 
 
 def detect_sections(text: str, form: str = "") -> list[SectionSpan]:
@@ -85,6 +113,8 @@ def detect_sections(text: str, form: str = "") -> list[SectionSpan]:
     if kept:
         nums = [int(re.match(r"Item (\d+)", it).group(1)) for _, it, _ in kept]
         kept = kept[nums.index(min(nums)):]
+    if form == "10-K":
+        kept = _drop_backtracking_10k_items(kept)
 
     if not kept:
         return [SectionSpan(section_name="Other", item="", start=0, end=n)]

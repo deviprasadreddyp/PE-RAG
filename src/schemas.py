@@ -34,6 +34,20 @@ class DocMetadata(_Base):
     document_id: str = ""           # stable filing id (== Chunk.doc_id); carried from Stage 3 on
     source: str = "SEC EDGAR"       # provenance, read from the filing header ("Source:")
     industry: str = ""              # GICS sector (curated reference table; "" if unknown)
+    accession_number: str = ""      # SEC accession number when present in the header
+    is_amended: bool = False        # true for 10-K/A, 10-Q/A, or amendment-labeled filings
+    is_restated: bool = False       # true when the header/filename marks the filing as restated
+    entity_registrant_name: str = ""  # XBRL dei:EntityRegistrantName when present
+    trading_symbol: str = ""        # XBRL dei:TradingSymbol when present
+    document_type: str = ""         # XBRL dei:DocumentType, normalized where possible
+    document_period_end_date: str = ""  # XBRL dei:DocumentPeriodEndDate
+    document_fiscal_year_focus: int = 0  # XBRL dei:DocumentFiscalYearFocus
+    document_fiscal_period_focus: str = ""  # XBRL dei:DocumentFiscalPeriodFocus ("FY", "Q1"...)
+    current_fiscal_year_end_date: str = ""  # XBRL dei:CurrentFiscalYearEndDate, often "--09-30"
+    amendment_flag: bool = False    # XBRL dei:AmendmentFlag; mirrors is_amended
+    amendment_description: str = "" # XBRL dei:AmendmentDescription
+    entity_incorporation_state_country_code: str = ""  # XBRL dei:EntityIncorporationStateCountryCode
+    entity_common_stock_shares_outstanding: str = ""   # XBRL dei:EntityCommonStockSharesOutstanding
 
 
 class SectionSpan(_Base):
@@ -64,6 +78,17 @@ class Chunk(DocMetadata):
     text: str                       # original text (for display + citation)
     embed_text: str = ""            # enriched text actually embedded (set in Stage 6)
     content_hash: str = ""          # sha256 of `text` — content-addressed dedup / change detection
+    section_original: str = ""      # initial section before deterministic post-chunk resolution
+    section_confidence: float = 0.0 # confidence in final section label (0-1)
+    section_source: str = ""        # initial_section | heading | content | table
+    section_signals: str = ""       # pipe-delimited scalar signal list, Chroma-safe
+    has_risk_heading: bool = False
+    has_mda_heading: bool = False
+    has_legal_heading: bool = False
+    has_business_heading: bool = False
+    has_financial_table: bool = False
+    has_revenue_table: bool = False
+    metadata_quality: float = 0.0   # deterministic quality score for ranking/debugging
 
     @classmethod
     def from_metadata(
@@ -156,6 +181,7 @@ class QueryAnalysis(_Base):
     quarters: list[str] = Field(default_factory=list)        # e.g. ["Q3"]
     forms: list[str] = Field(default_factory=list)           # "10-K" / "10-Q"
     section_intent: list[str] = Field(default_factory=list)  # e.g. ["Risk Factors", "MD&A"]
+    facets: list[str] = Field(default_factory=list)          # evidence facets: risk/financial/segments/...
 
 
 class HardFilter(_Base):
@@ -169,10 +195,11 @@ class HardFilter(_Base):
     years: list[int] = Field(default_factory=list)
     quarters: list[str] = Field(default_factory=list)
     forms: list[str] = Field(default_factory=list)
+    fiscal_periods: list[str] = Field(default_factory=list)  # e.g. ["2023Q4"] from explicit year+quarter queries
 
     @property
     def is_empty(self) -> bool:
-        return not (self.tickers or self.years or self.quarters or self.forms)
+        return not (self.tickers or self.years or self.quarters or self.forms or self.fiscal_periods)
 
     @property
     def where(self) -> dict:
@@ -180,27 +207,60 @@ class HardFilter(_Base):
         clauses: list[dict] = []
         if self.tickers:
             clauses.append({"ticker": {"$in": self.tickers}})
-        if self.years:
-            clauses.append({"year": {"$in": self.years}})
-        if self.quarters:
-            clauses.append({"quarter": {"$in": self.quarters}})
+        period_clause = self._period_where()
+        if period_clause:
+            clauses.append(period_clause)
         if self.forms:
             clauses.append({"form": {"$in": self.forms}})
         if not clauses:
             return {}
         return clauses[0] if len(clauses) == 1 else {"$and": clauses}
 
+    def _period_where(self) -> dict:
+        """Year/quarter filter with fiscal_period aliases for SEC fiscal-calendar edge cases."""
+        if self.fiscal_periods and self.years and self.quarters:
+            return {
+                "$or": [
+                    {"$and": [
+                        {"year": {"$in": self.years}},
+                        {"quarter": {"$in": self.quarters}},
+                    ]},
+                    {"fiscal_period": {"$in": self.fiscal_periods}},
+                ]
+            }
+        if self.years and self.quarters:
+            return {"$and": [
+                {"year": {"$in": self.years}},
+                {"quarter": {"$in": self.quarters}},
+            ]}
+        if self.years:
+            return {"year": {"$in": self.years}}
+        if self.quarters:
+            return {"quarter": {"$in": self.quarters}}
+        if self.fiscal_periods:
+            return {"fiscal_period": {"$in": self.fiscal_periods}}
+        return {}
+
     def matches(self, md: dict) -> bool:
         """Predicate for BM25 candidates: does this chunk's metadata satisfy the filter?"""
         if self.tickers and md.get("ticker") not in self.tickers:
             return False
-        if self.years and md.get("year") not in self.years:
-            return False
-        if self.quarters and md.get("quarter") not in self.quarters:
+        if not self._matches_period(md):
             return False
         if self.forms and md.get("form") not in self.forms:
             return False
         return True
+
+    def _matches_period(self, md: dict) -> bool:
+        if not (self.years or self.quarters or self.fiscal_periods):
+            return True
+        exact_year_quarter = True
+        if self.years:
+            exact_year_quarter = exact_year_quarter and md.get("year") in self.years
+        if self.quarters:
+            exact_year_quarter = exact_year_quarter and md.get("quarter") in self.quarters
+        fiscal_match = bool(self.fiscal_periods and md.get("fiscal_period") in self.fiscal_periods)
+        return exact_year_quarter or fiscal_match
 
 
 class RetrievalPlan(_Base):
@@ -210,6 +270,7 @@ class RetrievalPlan(_Base):
     per_entity_k: int = 0                                    # candidates per entity when not global
     section_boosts: list[str] = Field(default_factory=list)  # sections to boost, e.g. ["Risk Factors"]
     pool_size: int = 0                                       # fused pool size (0 -> settings.candidate_pool)
+    facets: list[str] = Field(default_factory=list)          # required evidence facets for coverage
 
 
 class Evidence(_Base):
@@ -241,9 +302,37 @@ class PromptBundle(_Base):
 class AnswerBody(_Base):
     """Structured output of the single LLM call (Stage 14)."""
 
-    executive_summary: str = ""
-    comparison: str = ""                                    # markdown table/bullets ("" if not a comparison)
-    supporting_evidence: str = ""
-    citations: list[str] = Field(default_factory=list)      # evidence ids referenced, e.g. ["E1", "E3"]
-    confidence: str = ""                                    # High / Medium / Low
-    limitations: str = ""
+    executive_summary: str = Field(
+        default="",
+        description=(
+            "Concise answer bullets. Every factual bullet or sentence must end with the evidence "
+            "id(s) supporting it, such as [E1] or [E1][E3]."
+        ),
+    )
+    comparison: str = Field(
+        default="",
+        description=(
+            "Markdown table or bullets for comparison questions. Include a citation in every row "
+            "or bullet; leave blank when not applicable."
+        ),
+    )
+    supporting_evidence: str = Field(
+        default="",
+        description=(
+            "Three to six concise evidence-backed bullets. Group related evidence ids in the same "
+            "bullet when they support the same point, and include [E#] citations."
+        ),
+    )
+    citations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "All evidence ids cited anywhere in executive_summary, comparison, supporting_evidence, "
+            "or limitations, plus any additional evidence ids that materially support the answer. "
+            "Include each id at most once, e.g. ['E1', 'E3']."
+        ),
+    )
+    confidence: str = Field(default="", description="High / Medium / Low")
+    limitations: str = Field(
+        default="",
+        description="Only state limitations grounded in missing or partial evidence; cite evidence when referenced.",
+    )

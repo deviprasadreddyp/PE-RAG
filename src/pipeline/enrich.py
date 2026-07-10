@@ -28,9 +28,13 @@ def _year(chunk: Chunk) -> str:
 
 def enrich_text(chunk: Chunk) -> str:
     quarter = chunk.quarter or "FY"                  # "FY" for a full-year 10-K (no quarter)
+    fiscal_focus = chunk.document_fiscal_period_focus or quarter
+    amended = "yes" if chunk.amendment_flag or chunk.is_amended else "no"
     header = (
         f"Company: {chunk.company} ({chunk.ticker}) | Filing: {chunk.form} | "
-        f"Year: {_year(chunk)} | Quarter: {quarter} | Section: {chunk.section}"
+        f"Year: {_year(chunk)} | Quarter: {quarter} | Fiscal focus: {fiscal_focus} | "
+        f"Period end: {chunk.document_period_end_date or chunk.report_period} | "
+        f"CIK: {chunk.cik} | Amended: {amended} | Section: {chunk.section}"
     )
     return f"{header}{SEP}{chunk.text}"
 

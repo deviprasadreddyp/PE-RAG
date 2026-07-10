@@ -27,6 +27,23 @@ PROSE = re.compile(r"UNITED STATES\s*SECURITIES AND EXCHANGE COMMISSION|FORM 10-
 # An XBRL context line starts with a CIK-length digit run then a namespace tag, e.g.
 # "0000320193us-gaap:CommonStockMember...". Prose never looks like this.
 XBRL_LINE = re.compile(r"^\s*\d{6,}(?:us-gaap|srt|dei|country|iso4217|xbrli|utr|[a-z]{1,10}):", re.I)
+XML_DECL = re.compile(r"<\?xml\b.*?\?>|<!DOCTYPE\b.*?>", re.I | re.S)
+XBRL_WRAPPER = re.compile(r"</?(?:[A-Za-z0-9_-]+:)?xbrl\b[^>]*>", re.I)
+XBRL_REF = re.compile(
+    r"<(?:[A-Za-z0-9_-]+:)?(?:schemaRef|roleRef|arcroleRef|linkbaseRef)\b[^>]*/?>",
+    re.I,
+)
+XBRL_BLOCK = re.compile(
+    r"<(?:[A-Za-z0-9_-]+:)?(?:context|unit)\b.*?</(?:[A-Za-z0-9_-]+:)?(?:context|unit)>",
+    re.I | re.S,
+)
+XMLNS_ATTR = re.compile(r"\s+xmlns(?::[A-Za-z0-9_-]+)?=\"[^\"]*\"", re.I)
+PARSER_ATTR = re.compile(r"\s+(?:contextRef|unitRef|decimals|precision|id)=\"[^\"]*\"", re.I)
+XML_INFRA_LINE = re.compile(
+    r"^\s*(?:<\?xml|<!DOCTYPE|</?(?:[A-Za-z0-9_-]+:)?xbrl\b|xmlns:|"
+    r"<(?:[A-Za-z0-9_-]+:)?(?:schemaRef|roleRef|arcroleRef|linkbaseRef|context|unit)\b)",
+    re.I,
+)
 
 
 def split_header_body(raw: str) -> tuple[str, str]:
@@ -47,13 +64,29 @@ def _normalize_line(line: str) -> str:
     return re.sub(r" {2,}", " ", line)               # collapse multi-space in prose only
 
 
+def _strip_xbrl_infrastructure(text: str) -> str:
+    """Remove parser plumbing while leaving narrative/table text intact."""
+    text = XML_DECL.sub("", text)
+    text = XBRL_BLOCK.sub("", text)                   # context/unit definitions are parser-only
+    text = XBRL_REF.sub("", text)
+    text = XBRL_WRAPPER.sub("", text)
+    text = XMLNS_ATTR.sub("", text)
+    text = PARSER_ATTR.sub("", text)
+    return text
+
+
 def clean(raw: str) -> str:
     """Raw filing text -> normalized prose (controlled; content-preserving)."""
     _, body = split_header_body(raw)
     body = body.replace("\r\n", "\n").replace("\r", "\n")            # CRLF -> LF
     m = PROSE.search(body)
     body = body[m.start():] if m else body                          # controlled boundary trim (prefix only)
-    lines = [_normalize_line(ln) for ln in body.split("\n") if not XBRL_LINE.match(ln)]
+    body = _strip_xbrl_infrastructure(body)
+    lines = [
+        _normalize_line(ln)
+        for ln in body.split("\n")
+        if not XBRL_LINE.match(ln) and not XML_INFRA_LINE.match(ln)
+    ]
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines))              # collapse blank-line runs
     return text.strip() + "\n"
 

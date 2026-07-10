@@ -1,5 +1,6 @@
 """Stage 6 tests: dense + sparse retrieval with fakes (no network/Chroma). Filter, hydrate, scores."""
 
+from src.observability import persist_artifact
 from src.retrieval import bm25_retriever, vector_retriever
 from src.retrieval.metadata_filter import build_filter
 from src.retrieval.metadata_parser import parse_query
@@ -86,3 +87,15 @@ def test_hydrate_texts_fills_bm25_results_from_store():
     assert bm[0].chunk.text == ""
     hydrated = vector_retriever.hydrate_texts(bm, store)
     assert hydrated[0].chunk.text == "the real body text"
+
+
+def test_hydrate_texts_falls_back_to_chunk_artifact(tmp_path, monkeypatch):
+    c = _chunk("AAPL_10K_2024__Business_c00", text="artifact body text")
+    persist_artifact("chunks", "AAPL_10K_2024", [c], base=tmp_path)
+    monkeypatch.setattr(vector_retriever, "load_artifact",
+                        lambda stage, doc_id: __import__("src.observability", fromlist=["load_artifact"])
+                        .load_artifact(stage, doc_id, base=tmp_path))
+    bm = bm25_retriever.search("x", HardFilter(),
+                               index=FakeIndex([{"id": c.id, "score": 1.0, "metadata": c.metadata()}]))
+    hydrated = vector_retriever.hydrate_texts(bm, FakeStore([]))
+    assert hydrated[0].chunk.text == "artifact body text"

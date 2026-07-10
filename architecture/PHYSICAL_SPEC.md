@@ -58,8 +58,8 @@ All chunk metadata is Chroma-safe (str/int/float/bool, no None, no lists). `extr
 
 ## 3. Configuration (`src/config.py`, env / `.env`)
 
-`openrouter_api_key` (SecretStr; the only key — embeddings + reranker are local) ·
-`embedding_model=BAAI/bge-large-en-v1.5` (local) · `generation_model=openai/gpt-4o` ·
+`openai_api_key` (SecretStr; embeddings) · `openrouter_api_key` (SecretStr; generation) ·
+`embedding_model=text-embedding-3-large` · `generation_model=openai/gpt-4o` ·
 `openrouter_base_url=https://openrouter.ai/api/v1` ·
 `chunk_max_chars=3000` (per-chunk MAX cap), `chunk_overlap=300` (chars) ·
 `vector_top_k=20`, `bm25_top_k=20`, `rrf_k=60`, `candidate_pool=30`, `rerank_top_k=8`, `min_similarity=0.35` · `embed_batch_size=100`, `embed_max_retries=3` ·
@@ -67,7 +67,7 @@ All chunk metadata is Chroma-safe (str/int/float/bool, no None, no lists). `extr
 
 ## 4. Storage schema
 
-**Chroma** collection `sec_filings__BAAI-bge-large-en-v1.5` (cosine; model-namespaced): each record =
+**Chroma** collection `sec_filings__text-embedding-3-large` (cosine; model-namespaced): each record =
 `id` (chunk_id) · `embedding` · `document` (original text) · `metadata` (ticker/company/form/
 fiscal_period/year/quarter/section/section_index/source_url/…). *(Planned add: `hash`; `created_at`
 is intentionally omitted for deterministic artifacts.)*

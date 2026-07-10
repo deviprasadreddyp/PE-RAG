@@ -24,7 +24,8 @@ _PATTERNS: dict[str, list[str]] = {
     "Trend": [
         r"\btrend", r"\bchang", r"\bgrow", r"\bgrew\b", r"\bincreas", r"\bdecreas", r"\bdeclin",
         r"\byear[- ]over[- ]year\b", r"\byoy\b", r"\bover time\b", r"\btrajectory\b",
-        r"\bhistorical\b", r"\bhow (has|have|did|do|is|are)\b",
+        r"\bhistorical\b", r"\bhow (has|have|did|do|is|are)\b", r"\bsubscription\b",
+        r"\bsubscriber\b", r"\badvertising revenue\b", r"\bvolume and revenue\b",
     ],
     "Risk": [
         r"\brisk", r"\bthreat", r"\buncertaint", r"\bheadwind", r"\bchalleng", r"\bexposure\b",
@@ -33,7 +34,8 @@ _PATTERNS: dict[str, list[str]] = {
         r"\brevenu", r"\bincome\b", r"\bnet income\b", r"\bprofit", r"\bmargin", r"\bearn",
         r"\beps\b", r"\bcash flow", r"\bcost", r"\bexpens", r"\bdebt\b", r"\bassets?\b",
         r"\bliabilit", r"\bsales\b", r"\bgross\b", r"\boperating\b", r"\bbalance sheet\b",
-        r"\bfinancial", r"\bguidance\b", r"\bdividend",
+        r"\bfinancial", r"\bguidance\b", r"\bdividend", r"\badvertising\b", r"\bsubscription\b",
+        r"\bsubscriber\b", r"\bvolume\b",
     ],
 }
 

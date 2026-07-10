@@ -7,7 +7,7 @@ Also builds the standard refusal ``Answer`` used when guardrails reject before t
 
 from __future__ import annotations
 
-from src.retrieval.citation_mapper import map_citations
+from src.retrieval.citation_mapper import map_citations, referenced_ids
 from src.schemas import Answer, AnswerBody, Evidence, RetrievalResult
 
 REFUSAL = "Information unavailable in the provided filings."
@@ -24,6 +24,9 @@ def render_markdown(body: AnswerBody) -> str:
         parts.append(f"## Supporting Evidence\n{body.supporting_evidence}")
     if body.limitations:
         parts.append(f"## Limitations\n{body.limitations}")
+    citations = referenced_ids(body)
+    if citations:
+        parts.append("## Citations\n" + ", ".join(f"[{eid}]" for eid in citations))
     if body.confidence:
         parts.append(f"**Confidence:** {body.confidence}")
     return "\n\n".join(parts)

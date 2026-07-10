@@ -29,5 +29,11 @@ def test_debug_blocks_ordered_and_skips_absent():
     assert ("2. Intents", ["Risk"]) in blocks
 
 
+def test_stream_chunks_preserves_text_order():
+    assert list(app.stream_chunks("abcdef", chunk_size=2)) == ["ab", "cd", "ef"]
+    with pytest.raises(ValueError):
+        list(app.stream_chunks("abc", chunk_size=0))
+
+
 def test_render_is_callable():
     assert callable(app.render)

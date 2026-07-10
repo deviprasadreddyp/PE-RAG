@@ -1,6 +1,6 @@
 """Stages 15-16 tests: citation mapping ([E#] resolve + drop unknown), markdown, refusal."""
 
-from src.retrieval.citation_mapper import map_citations, referenced_ids
+from src.retrieval.citation_mapper import inline_ids, map_citations, referenced_ids, with_complete_source_list
 from src.retrieval.evidence_builder import build_evidence
 from src.retrieval.response_parser import REFUSAL, build_answer, refusal_answer, render_markdown
 from src.schemas import AnswerBody, Chunk, DocMetadata, RetrievalResult
@@ -22,6 +22,14 @@ def _ev(cids):
 def test_referenced_ids_from_list_and_text():
     body = AnswerBody(citations=["E1"], supporting_evidence="also see [E3] and [E1]")
     assert referenced_ids(body) == ["E1", "E3"]              # E1 from list, E3 from text, deduped
+    assert inline_ids(body) == ["E3", "E1"]
+
+
+def test_complete_source_list_adds_prompt_evidence_after_inline_cites():
+    ev = _ev([("AAPL_c0", "AAPL", "Risk Factors"), ("TSLA_c0", "TSLA", "Business")])
+    body = AnswerBody(citations=[], executive_summary="Apple risk [E1].")
+    completed = with_complete_source_list(body, ev)
+    assert completed.citations == ["E1", "E2"]
 
 
 def test_map_citations_resolves_and_drops_unknown():
@@ -38,6 +46,7 @@ def test_render_markdown_sections():
                                     supporting_evidence="[E1]", confidence="High"))
     assert "## Executive Summary" in md and "## Comparison" in md
     assert "## Supporting Evidence" in md and "**Confidence:** High" in md
+    assert "## Citations" in md and "[E1]" in md
 
 
 def test_build_answer_attaches_sources():

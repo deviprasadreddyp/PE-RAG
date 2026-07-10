@@ -57,6 +57,18 @@ def test_is_relevant_matches_metadata():
     assert not is_relevant(_chunk("AAPL", 2024, "Business"), exp)         # wrong section
 
 
+def test_business_segments_accepts_mda_equivalent_with_signal():
+    c = _chunk("AMZN", 2026, "Management's Discussion and Analysis").model_copy(
+        update={"has_business_heading": True, "section_signals": "business_model_content"}
+    )
+    exp = {
+        "question": "Summarize Amazon's business segments",
+        "companies": ["AMZN"],
+        "sections": ["Business"],
+    }
+    assert is_relevant(c, exp)
+
+
 def test_evaluate_case_scores_relevant_evidence():
     ev = [Evidence(evidence_id="E1", chunk=_chunk("AAPL", 2024, "Risk Factors"),
                    tag="[AAPL 10-K FY2024 · Risk Factors]"),

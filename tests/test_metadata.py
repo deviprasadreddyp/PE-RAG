@@ -1,7 +1,7 @@
 """Stage 3 tests: header parsing, header-over-filename precedence, filename backfill, normalization."""
 
 from src.observability import load_artifact, persist_artifact
-from src.pipeline.metadata import build_metadata, normalize_form, run_metadata
+from src.pipeline.metadata import build_metadata, extract_xbrl_metadata, normalize_form, run_metadata
 from src.schemas import DocMetadata
 
 SEP = "=" * 60
@@ -30,6 +30,7 @@ def test_full_header_extraction():
     assert m.document_id == "AAPL_10K_2022Q3_2022-10-28"
     assert m.source == "SEC EDGAR"
     assert m.industry == "Information Technology"
+    assert m.accession_number == "" and not m.is_amended and not m.is_restated
 
 
 def test_source_defaults_and_industry_unknown_ticker():
@@ -64,6 +65,56 @@ def test_form_normalization():
     assert normalize_form("10K") == "10-K"
     assert normalize_form("10-Q") == "10-Q"
     assert normalize_form("nonsense") == ""
+
+
+def test_amended_restated_flags_from_header():
+    header = (
+        "Company: Apple Inc\nTicker: AAPL\nFiling Type: 10-K/A Amended Restated Annual Report\n"
+        "Filing Date: 2024-11-01\nAccession Number: 0000320193-24-000123\n"
+    )
+    m = build_metadata("AAPL_10K_2024-11-01", _raw(header))
+    assert m.form == "10-K"
+    assert m.accession_number == "0000320193-24-000123"
+    assert m.is_amended is True
+    assert m.is_restated is True
+
+
+def test_xbrl_metadata_preserved_from_compact_preamble():
+    raw = _raw(
+        "Company: Apple Inc\nTicker: AAPL\nFiling Type: 10-Q\nFiling Date: 2022-04-29\n",
+        "aapl-20220326false2022Q20000320193--09-24P1Y"
+        "UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-Q\nItem 1. Business\n",
+    )
+    m = build_metadata("AAPL_10Q_2022Q1_2022-04-29", raw)
+    assert m.document_period_end_date == "2022-03-26"
+    assert m.report_period == "2022-03-26"
+    assert m.document_fiscal_year_focus == 2022
+    assert m.document_fiscal_period_focus == "Q2"
+    assert m.quarter == "Q2"
+    assert m.current_fiscal_year_end_date == "--09-24"
+    assert m.amendment_flag is False and m.is_amended is False
+
+
+def test_xbrl_metadata_preserved_from_xml_tags():
+    raw = _raw(
+        "Filing Date: 2024-02-01\n",
+        "<dei:EntityRegistrantName>Example Co</dei:EntityRegistrantName>"
+        "<dei:TradingSymbol>EXM</dei:TradingSymbol>"
+        "<dei:DocumentType>10-K</dei:DocumentType>"
+        "<dei:DocumentPeriodEndDate>2023-12-31</dei:DocumentPeriodEndDate>"
+        "<dei:DocumentFiscalYearFocus>2023</dei:DocumentFiscalYearFocus>"
+        "<dei:DocumentFiscalPeriodFocus>FY</dei:DocumentFiscalPeriodFocus>"
+        "<dei:AmendmentFlag>true</dei:AmendmentFlag>"
+        "<dei:AmendmentDescription>Restated annual report</dei:AmendmentDescription>"
+        "UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K\n",
+    )
+    facts = extract_xbrl_metadata(raw)
+    assert facts["entity_registrant_name"] == "Example Co"
+    assert facts["trading_symbol"] == "EXM"
+    assert facts["document_type"] == "10-K"
+    assert facts["document_fiscal_year_focus"] == 2023
+    assert facts["document_fiscal_period_focus"] == "FY"
+    assert facts["amendment_flag"] is True
 
 
 def test_run_metadata_reads_raw_writes_json(tmp_path):

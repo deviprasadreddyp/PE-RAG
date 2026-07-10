@@ -19,6 +19,7 @@ from __future__ import annotations
 from math import ceil
 
 from src.config import settings
+from src.retrieval import facets as facet_mod
 from src.schemas import QueryAnalysis, RetrievalPlan
 
 _FINANCIAL_SECTIONS = [
@@ -41,12 +42,18 @@ def plan_retrieval(qa: QueryAnalysis) -> RetrievalPlan:
         mode, per_entity_k, pool_size = "global", 0, pool
 
     boosts = list(qa.section_intent)
+    boosts.extend(s for s in facet_mod.sections_for_facets(qa.facets) if s not in boosts)
+    if "Trend" in qa.intents or "Temporal" in qa.intents:
+        boosts.extend(s for s in _FINANCIAL_SECTIONS if s not in boosts)
+    elif "Financial" in qa.intents:
+        boosts.extend(s for s in _FINANCIAL_SECTIONS if s not in boosts)
     if not boosts:
         if "Risk" in qa.intents:
             boosts = ["Risk Factors"]
-        elif "Financial" in qa.intents:
+        elif "Trend" in qa.intents or "Temporal" in qa.intents or "Financial" in qa.intents:
             boosts = list(_FINANCIAL_SECTIONS)
 
     return RetrievalPlan(
-        mode=mode, per_entity_k=per_entity_k, section_boosts=boosts, pool_size=pool_size
+        mode=mode, per_entity_k=per_entity_k, section_boosts=boosts,
+        pool_size=pool_size, facets=qa.facets
     )

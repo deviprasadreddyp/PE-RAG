@@ -112,6 +112,31 @@ def test_hard_filter_where_and_matches():
     assert not f.matches({"ticker": "AAPL", "year": 2023, "form": "10-K"})   # wrong year
 
 
+def test_hard_filter_matches_fiscal_period_alias_for_year_quarter():
+    f = HardFilter(tickers=["AAPL"], years=[2023], quarters=["Q4"],
+                   fiscal_periods=["2023Q4"], forms=["10-Q"])
+    assert f.where == {"$and": [
+        {"ticker": {"$in": ["AAPL"]}},
+        {"$or": [
+            {"$and": [
+                {"year": {"$in": [2023]}},
+                {"quarter": {"$in": ["Q4"]}},
+            ]},
+            {"fiscal_period": {"$in": ["2023Q4"]}},
+        ]},
+        {"form": {"$in": ["10-Q"]}},
+    ]}
+    assert f.matches({"ticker": "AAPL", "year": 2023, "quarter": "Q4", "form": "10-Q"})
+    assert f.matches({
+        "ticker": "AAPL", "year": 2024, "quarter": "Q1",
+        "fiscal_period": "2023Q4", "form": "10-Q",
+    })
+    assert not f.matches({
+        "ticker": "AAPL", "year": 2024, "quarter": "Q1",
+        "fiscal_period": "2024Q1", "form": "10-Q",
+    })
+
+
 def test_hard_filter_empty_is_no_op():
     f = HardFilter()
     assert f.is_empty and f.where == {}

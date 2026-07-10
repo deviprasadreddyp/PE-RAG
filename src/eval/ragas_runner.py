@@ -7,8 +7,8 @@ RAGAS scores each answer on the four metrics the design calls for:
 - **context_recall** — was enough evidence retrieved? (needs a reference answer)
 
 RAGAS itself makes MANY LLM calls — that's fine: this is OFFLINE evaluation, not the production query
-path (the one-call rule applies only to answering a user). The grader LLM is our OpenRouter model;
-embeddings are local bge. Heavy deps (``ragas``) are lazy; the ``evaluator`` is injectable so the
+path (the one-call rule applies only to answering a user). The grader LLM is our OpenAI model;
+embeddings use the configured embedding backend where available. Heavy deps (``ragas``) are lazy; the ``evaluator`` is injectable so the
 pipeline glue is unit-testable without ragas installed. Real runs need ``pip install ragas`` + key.
 """
 
@@ -48,15 +48,21 @@ def aggregate_scores(per_sample: list[dict], metric_names=RAGAS_METRICS) -> dict
 
 
 def default_llm_and_embeddings():
-    """Grader LLM (OpenRouter) + local bge embeddings for RAGAS (lazy)."""
+    """Grader LLM (OpenAI) + configured embeddings for RAGAS (lazy)."""
     from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(model=settings.generation_model, api_key=settings.require_openrouter_key(),
-                     base_url=settings.openrouter_base_url, temperature=0)
+    llm = ChatOpenAI(model=settings.generation_model, api_key=settings.require_openai_key(),
+                     temperature=0)
     embeddings = None
     try:
-        from langchain_huggingface import HuggingFaceEmbeddings
-        embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
+        from src.pipeline.embed import is_openai_embedding_model
+        if is_openai_embedding_model(settings.embedding_model):
+            from langchain_openai import OpenAIEmbeddings
+            embeddings = OpenAIEmbeddings(model=settings.embedding_model,
+                                          api_key=settings.require_openai_key())
+        else:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
     except Exception:  # noqa: BLE001 — embeddings are optional for some metrics
         embeddings = None
     return llm, embeddings

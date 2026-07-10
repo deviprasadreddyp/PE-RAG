@@ -8,8 +8,8 @@ a key is unset, so the deterministic stages that need no key still run.
 Usage::
 
     from src.config import settings
-    settings.embedding_model            # "BAAI/bge-large-en-v1.5" (local)
-    settings.require_openrouter_key()   # raises if OPENROUTER_API_KEY is unset (generation)
+    settings.embedding_model            # "text-embedding-3-large" (OpenAI)
+    settings.require_openai_key()       # raises if OPENAI_API_KEY is unset (embeddings)
 """
 
 from __future__ import annotations
@@ -32,18 +32,21 @@ class Settings(BaseSettings):
     )
 
     # --- Secrets (empty until provided; validated at point of use) ---
-    # Embeddings + reranker are LOCAL (no key). The single answer call goes through OpenRouter
-    # (OpenAI-compatible), so the only key needed is OPENROUTER_API_KEY.
-    openrouter_api_key: SecretStr = SecretStr("")   # the single answer-generation call (via OpenRouter)
+    # Embeddings and the single answer call default to OpenAI.
+    openai_api_key: SecretStr = SecretStr("")       # embedding generation + answer generation
+    openrouter_api_key: SecretStr = SecretStr("")   # legacy, no longer used by default
     langsmith_api_key: SecretStr = SecretStr("")    # optional: LangSmith tracing (traces, tokens, latency)
 
     # --- Observability ---
     langsmith_project: str = "PE-RAG"
 
     # --- Models ---
-    embedding_model: str = "BAAI/bge-large-en-v1.5"   # local (sentence-transformers), 1024-dim, no API
-    generation_model: str = "openai/gpt-4o"           # OpenRouter model id (ChatGPT via OpenRouter)
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    embedding_model: str = "text-embedding-3-large"   # OpenAI embeddings; BAAI/bge-* remains swappable
+    generation_model: str = "gpt-5.5"                 # direct OpenAI Responses API
+    generation_max_output_tokens: int = Field(6000, ge=256, le=8000)
+    generation_reasoning_effort: str = "low"
+    generation_verbosity: str = "medium"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"  # legacy
 
     # --- Chunking: Section-Aware Hierarchical Chunking (see architecture/CHUNKING_STRATEGY.md) ---
     # Sections are the semantic unit (the parents). WITHIN each section the recursive splitter
@@ -108,6 +111,14 @@ class Settings(BaseSettings):
         return self.data_path / ".embedding_cache"
 
     # --- Secret guards (fail loudly, only when actually needed) ---
+    def require_openai_key(self) -> str:
+        v = self.openai_api_key.get_secret_value()
+        if not v:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set (needed for OpenAI embeddings). Add it to .env."
+            )
+        return v
+
     def require_openrouter_key(self) -> str:
         v = self.openrouter_api_key.get_secret_value()
         if not v:

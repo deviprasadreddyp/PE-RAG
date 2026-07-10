@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 from src.reference import match_companies
+from src.retrieval import facets as facet_mod
 from src.retrieval.query_classifier import classify
 from src.schemas import QueryAnalysis
 
@@ -25,15 +26,28 @@ _QWORD_MAP = {"first": "Q1", "second": "Q2", "third": "Q3", "fourth": "Q4"}
 
 # Section intent: keyword -> canonical SEC section name (first match wins per section).
 _SECTION_KEYWORDS: list[tuple[str, list[str]]] = [
-    ("Risk Factors", [r"\brisk", r"\bthreat", r"\bheadwind", r"\buncertaint", r"\bexposure\b"]),
+    ("Risk Factors", [
+        r"\brisk", r"\bregulatory risk", r"\bregulation", r"\bcompliance\b",
+        r"\bantitrust\b", r"\bprivacy\b", r"\bcybersecurity\b", r"\bthreat",
+        r"\bheadwind", r"\buncertaint", r"\bexposure\b",
+    ]),
     ("Management's Discussion and Analysis",
      [r"\bmd&?a\b", r"management(?:'s)? discussion", r"\bliquidity\b",
-      r"results of operations", r"\boutlook\b", r"\bguidance\b"]),
+      r"results of operations", r"\bgrowth outlook\b", r"\boutlook\b", r"\bguidance\b",
+      r"\bmonetization\b", r"\buser growth\b", r"\bsegment performance\b",
+      r"\bdemand\b", r"\bmarket conditions\b", r"\brevenue trends?\b",
+      r"\brevenue growth\b", r"\badvertising revenue\b", r"\bsubscription revenue\b",
+      r"\bsubscriber\b", r"\bvolume and revenue\b"]),
     ("Financial Statements and Supplementary Data",
      [r"balance sheet", r"income statement", r"cash flow", r"financial statement",
       r"\bearnings\b", r"\brevenue", r"\bmargin", r"\bnet income\b", r"\bprofit"]),
-    ("Business", [r"\bbusiness\b", r"\bproducts?\b", r"\bsegment", r"\bstrateg"]),
-    ("Legal Proceedings", [r"\blegal\b", r"\blitigation\b", r"\blawsuit", r"\bproceeding"]),
+    ("Business", [r"\bbusiness\b", r"\bbusiness model\b", r"\bmembership\b",
+                  r"\bproducts?\b", r"\bsegment", r"\bstrateg"]),
+    ("Legal Proceedings", [
+        r"\blegal\b", r"\blitigation\b", r"\blawsuit", r"\bproceeding",
+        r"\bregulatory\b", r"\binvestigation\b", r"\bantitrust\b",
+        r"\bgovernment (?:investigation|inquiry|proceeding)s?\b",
+    ]),
 ]
 
 
@@ -70,6 +84,7 @@ def parse_query(query: str) -> QueryAnalysis:
     """Full deterministic query understanding -> QueryAnalysis (Stages 2-3 combined)."""
     companies = match_companies(query)
     intents = list(classify(query))
+    sections = extract_section_intent(query)
     # company cardinality — depends on the count of extracted tickers, so decided here
     if len(companies) >= 2:
         intents.append("MultiCompany")
@@ -82,5 +97,6 @@ def parse_query(query: str) -> QueryAnalysis:
         years=extract_years(query),
         quarters=extract_quarters(query),
         forms=extract_forms(query),
-        section_intent=extract_section_intent(query),
+        section_intent=sections,
+        facets=facet_mod.extract_facets(query, intents=intents, sections=sections),
     )

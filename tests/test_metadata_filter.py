@@ -15,6 +15,29 @@ def test_build_filter_from_parsed_query():
     ]}
 
 
+def test_year_quarter_filter_also_matches_fiscal_period_alias():
+    f = build_filter(parse_query("What legal proceedings does Apple disclose in Q4 2023 10-Q?"))
+    assert f.tickers == ["AAPL"]
+    assert f.years == [2023]
+    assert f.quarters == ["Q4"]
+    assert f.forms == ["10-Q"]
+    assert f.fiscal_periods == ["2023Q4"]
+    assert f.matches({
+        "ticker": "AAPL",
+        "year": 2024,
+        "quarter": "Q1",
+        "fiscal_period": "2023Q4",
+        "form": "10-Q",
+    })
+    assert not f.matches({
+        "ticker": "AAPL",
+        "year": 2024,
+        "quarter": "Q1",
+        "fiscal_period": "2024Q1",
+        "form": "10-Q",
+    })
+
+
 def test_section_intent_is_not_a_hard_filter():
     qa = parse_query("Apple risk factors")           # section intent present, no company constraint beyond AAPL
     f = build_filter(qa)

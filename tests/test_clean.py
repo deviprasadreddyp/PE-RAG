@@ -40,6 +40,26 @@ def test_no_anchor_fallback_keeps_text():
     assert "just text" in c and "12345" in c
 
 
+def test_clean_removes_xml_infrastructure_but_keeps_business_text():
+    raw = (
+        "Company: Example\n" + "=" * 60 + "\n"
+        "<?xml version=\"1.0\"?><xbrli:xbrl xmlns:dei=\"x\" xmlns:xbrli=\"y\">"
+        "<link:schemaRef xlink:href=\"schema.xsd\"/>"
+        "<xbrli:context id=\"c1\"><xbrli:entity>parser only</xbrli:entity></xbrli:context>"
+        "<xbrli:unit id=\"u1\"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>"
+        "</xbrli:xbrl>\n"
+        "UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K\n"
+        "Item 7. Management's Discussion and Analysis\n"
+        "Revenue was $10 million.\n"
+        "Segment | 2024 | 2023\n"
+        "Cloud | $10 | $8\n"
+    )
+    c = clean(raw)
+    assert "schemaRef" not in c and "xbrli:context" not in c and "xmlns:" not in c
+    assert "Revenue was $10 million." in c
+    assert "Cloud | $10 | $8" in c
+
+
 def test_run_clean_reads_raw_writes_cleaned(tmp_path):
     persist_artifact("raw", "AAPL_10K_2024", RAW, ext="txt", base=tmp_path)
     rep = run_clean("AAPL_10K_2024", base=tmp_path)

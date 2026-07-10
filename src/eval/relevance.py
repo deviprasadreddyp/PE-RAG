@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from src.retrieval import facets as facet_mod
 from src.schemas import Chunk
 
 
@@ -26,8 +27,14 @@ def is_relevant(chunk: Chunk, expected: dict) -> bool:
         return False
     if expected.get("forms") and chunk.form not in expected["forms"]:
         return False
-    if expected.get("sections") and chunk.section not in expected["sections"]:
-        return False
+    if expected.get("sections"):
+        facets = expected.get("facets") or facet_mod.extract_facets(
+            expected.get("question", ""),
+            sections=expected.get("sections") or (),
+        )
+        if not any(facet_mod.chunk_matches_section(chunk, section, facets=facets)
+                   for section in expected["sections"]):
+            return False
     return True
 
 

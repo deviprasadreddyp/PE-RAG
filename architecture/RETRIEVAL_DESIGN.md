@@ -180,7 +180,7 @@ Bounds are enforced with pydantic `Field(ge=, le=)` (P2).
 | `rerank_model` | `BAAI/bge-reranker-base` | — | — | local cross-encoder; `-large` if latency budget allows |
 | `generation_model` | `openai/gpt-4o` | — | — | the single grounded call, via OpenRouter ([ADR-014](ADR.md)) |
 | `openrouter_base_url` | `https://openrouter.ai/api/v1` | — | — | OpenAI-compatible endpoint for generation |
-| `embedding_model` | `BAAI/bge-large-en-v1.5` | — | — | local query + corpus embeddings ([ADR-013](ADR.md)) |
+| `embedding_model` | `text-embedding-3-large` | — | — | OpenAI query + corpus embeddings ([ADR-013](ADR.md)) |
 | `embed_batch_size` | 100 | 1 | 2048 | chunks per OpenAI request |
 | `embed_max_retries` | 3 | 0 | 10 | backoff on 429/5xx |
 

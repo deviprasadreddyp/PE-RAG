@@ -7,7 +7,8 @@ from src.pipeline.enrich import SEP, enrich_chunk, enrich_text, run_enrich
 from src.schemas import Chunk, DocMetadata
 
 HEADER = re.compile(
-    r"^Company: .+ \(.+\) \| Filing: .+ \| Year: .+ \| Quarter: .+ \| Section: .+$"
+    r"^Company: .+ \(.+\) \| Filing: .+ \| Year: .+ \| Quarter: .+ \| "
+    r"Fiscal focus: .+ \| Period end: .* \| CIK: .* \| Amended: .+ \| Section: .+$"
 )
 
 
@@ -30,8 +31,10 @@ def test_original_text_unchanged():
 def test_embed_text_shape():
     e = enrich_chunk(_chunk())
     assert e.embed_text.startswith(
-        "Company: Apple Inc (AAPL) | Filing: 10-K | Year: 2022 | Quarter: Q3 | Section: Risk Factors"
+        "Company: Apple Inc (AAPL) | Filing: 10-K | Year: 2022 | Quarter: Q3 | "
+        "Fiscal focus: Q3 | Period end:"
     )
+    assert "Amended: no | Section: Risk Factors" in e.embed_text
     assert SEP in e.embed_text and e.embed_text.endswith("Supply chain risk.")
 
 

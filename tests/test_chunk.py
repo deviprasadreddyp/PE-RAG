@@ -1,7 +1,7 @@
 """Stage 5 tests: within-section splitting, stable ids, full metadata, size bounds."""
 
 from src.observability import load_artifact, persist_artifact
-from src.pipeline.chunk import chunk_document, make_splitter, run_chunk
+from src.pipeline.chunk import chunk_document, make_splitter, run_chunk, split_section_text
 from src.schemas import Chunk, DocMetadata, SectionSpan
 
 META = DocMetadata(
@@ -32,6 +32,17 @@ def test_section_assignment_matches_source():
         assert c.section == ("Business" if "alpha" in c.text else "Risk Factors")
 
 
+def test_chunking_resolves_weak_section_metadata():
+    text = "Note 11 - Legal Proceedings The company is involved in lawsuits and claims."
+    secs = [SectionSpan(section_name="Exhibits", item="", start=0, end=len(text))]
+    cs = chunk_document("D", META, text, secs, splitter=make_splitter(chunk_size=500, chunk_overlap=0))
+    assert len(cs) == 1
+    assert cs[0].section == "Legal Proceedings"
+    assert cs[0].section_original == "Exhibits"
+    assert cs[0].has_legal_heading
+    assert cs[0].metadata_quality > 0.0
+
+
 def test_ids_are_section_aware_unique_and_stable():
     a, b = _chunks(), _chunks()
     ids = [c.id for c in a]
@@ -56,6 +67,30 @@ def test_chunk_size_is_a_max_cap_not_fixed():
     cs = chunk_document("D", META, small, secs, splitter=SPLIT)
     assert len(cs) == 1
     assert len(cs[0].text) < 120                                 # size follows content, not the cap
+
+
+def test_table_aware_split_keeps_rows_together():
+    table = "\n".join([
+        "Net sales | $ 10 | $ 20 | $ 30",
+        "Cost of sales | 4 | 8 | 12",
+        "Gross margin | 6 | 12 | 18",
+        "Operating income | 2 | 4 | 6",
+    ])
+    parts = split_section_text(table, splitter=make_splitter(chunk_size=70, chunk_overlap=0))
+    assert len(parts) > 1
+    joined = "\n".join(parts)
+    for row in table.splitlines():
+        assert row in joined
+    assert not any(part.endswith("Net sales | $") for part in parts)
+
+
+def test_oversized_table_like_line_falls_back_to_recursive_split():
+    line = (
+        "Risk Factors " + ("revenue 2022 2023 2024 2025 exposure and uncertainty " * 80)
+    )
+    parts = split_section_text(line, splitter=make_splitter(chunk_size=500, chunk_overlap=50))
+    assert len(parts) > 1
+    assert max(len(part) for part in parts) <= 600
 
 
 def test_content_hash_is_sha256_of_text():

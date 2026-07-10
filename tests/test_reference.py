@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from src.reference import SECTOR_BY_TICKER, sector_for
+from src.reference import SECTOR_BY_TICKER, match_companies, sector_for
 
 VALID_GICS = {
     "Information Technology", "Health Care", "Financials", "Consumer Discretionary",
@@ -30,3 +30,10 @@ def test_every_corpus_ticker_has_a_sector():
     tickers = {f.split("_")[0] for f in json.loads(manifest.read_text("utf-8"))["files"]}
     missing = {t for t in tickers if not sector_for(t)}
     assert not missing, f"tickers with no curated sector: {sorted(missing)}"
+
+
+def test_company_aliases_and_groups():
+    assert match_companies("Compare J.P. Morgan and Amazon.com Inc") == ["JPM", "AMZN"]
+    assert match_companies("regulatory risks for major pharmaceutical companies") == [
+        "ABBV", "JNJ", "LLY", "MRK", "PFE",
+    ]

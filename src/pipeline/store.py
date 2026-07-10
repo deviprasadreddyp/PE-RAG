@@ -141,6 +141,16 @@ def run_store(*, base=None, store: VectorStore | None = None, collection: str | 
             docs.append(text_by_id[r["chunk_id"]])
             metas.append(r["metadata"])
 
+    bm25_ids, bm25_docs, bm25_metas = [], [], []
+    for doc_id in list_artifacts("chunks", base=base):
+        for c in load_artifact("chunks", doc_id, base=base):
+            bm25_ids.append(c["id"])
+            bm25_docs.append(c["text"])
+            bm25_metas.append({k: v for k, v in c.items() if k not in {"text", "embed_text"}})
+
+    if bm25_ids and not ids and store is None:
+        store = ChromaVectorStore(persist_dir=vs_dir, collection=collection)
+
     if not ids and store is None:                       # nothing to store — don't create an empty DB
         return {"stored": 0, "bm25": 0}
 
@@ -149,8 +159,8 @@ def run_store(*, base=None, store: VectorStore | None = None, collection: str | 
         sl = slice(i, i + UPSERT_BATCH)
         store.upsert(ids[sl], embs[sl], docs[sl], metas[sl])
 
-    Bm25Index.build(ids, docs, metas).save(vs_dir / "bm25.json")
-    return {"stored": store.count(), "bm25": len(ids)}
+    Bm25Index.build(bm25_ids, bm25_docs, bm25_metas).save(vs_dir / "bm25.json")
+    return {"stored": store.count(), "bm25": len(bm25_ids)}
 
 
 if __name__ == "__main__":

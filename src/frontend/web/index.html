@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PE-RAG Analyst</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="flow-bg" aria-hidden="true"></div>
+    <main class="app-shell">
+      <section class="chat-surface" aria-label="PE-RAG chat">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <div>
+              <p class="eyebrow">SEC intelligence</p>
+              <h1>PE-RAG Analyst</h1>
+            </div>
+          </div>
+          <div class="top-actions">
+            <button class="ghost-button" id="metricsToggle" type="button" aria-expanded="false">Metrics</button>
+            <button class="ghost-button" id="evidenceToggle" type="button" aria-expanded="false">Evidence</button>
+            <button class="ghost-button" id="clearBtn" type="button">New chat</button>
+          </div>
+        </header>
+
+        <section class="metrics-panel" id="metricsPanel" aria-label="System metrics" hidden>
+          <div><span>Hit@K</span><strong>1.00</strong></div>
+          <div><span>MRR</span><strong>1.00</strong></div>
+          <div><span>Citations</span><strong>1.00</strong></div>
+          <div><span>Chunks</span><strong>60,029</strong></div>
+        </section>
+
+        <section class="messages" id="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="bubble intro">
+              <p class="kicker">Hello</p>
+              <h2>Which filing question should we diligence today?</h2>
+              <div class="sample-grid">
+                <button type="button" data-sample="Compare Apple, Tesla, and JPMorgan risk factors">Compare risk exposure</button>
+                <button type="button" data-sample="How has NVIDIA's revenue and growth outlook changed?">Review NVIDIA growth</button>
+                <button type="button" data-sample="What regulatory risks do UnitedHealth and Johnson & Johnson disclose?">Check regulatory risk</button>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <form class="composer" id="chatForm">
+          <textarea
+            id="questionInput"
+            rows="1"
+            placeholder="Ask about SEC filings"
+            autocomplete="off"
+          ></textarea>
+          <button class="send-button" id="sendBtn" type="submit" aria-label="Send question">
+            <span>&gt;</span>
+          </button>
+        </form>
+      </section>
+
+      <aside class="evidence-drawer" id="evidenceDrawer" aria-label="Evidence and diagnostics" aria-hidden="true">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Evidence</p>
+            <h2>Sources and trace</h2>
+          </div>
+          <button class="icon-button" id="closeEvidence" type="button" aria-label="Close evidence">x</button>
+        </div>
+
+        <label class="switch">
+          <input type="checkbox" id="debugToggle" checked />
+          <span>Include debug trace</span>
+        </label>
+
+        <details class="trace-box status-box" open>
+          <summary>Index status</summary>
+          <div class="status-row">
+            <span class="status-dot"></span>
+            <div>
+              <strong>Index online</strong>
+              <p>Chroma + BM25 ready for hybrid retrieval.</p>
+            </div>
+          </div>
+        </details>
+
+        <details class="trace-box" open>
+          <summary>Sources</summary>
+          <section class="source-list" id="sourceList">
+            <p class="empty">Sources will appear after an answer.</p>
+          </section>
+        </details>
+
+        <details class="trace-box" id="traceBox">
+          <summary>Developer trace</summary>
+          <pre id="traceOutput">{}</pre>
+        </details>
+      </aside>
+    </main>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

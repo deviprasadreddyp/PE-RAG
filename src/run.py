@@ -8,8 +8,8 @@
 Stages run in order: ingest -> clean -> metadata -> sections -> chunk -> enrich
 -> embed -> store. Each is idempotent and resumable: a stage is skipped when its
 output artifact is already current (newer than its inputs), unless --force.
-All stages run locally with no API key (embeddings are the local bge model); ``embed`` just needs
-``sentence-transformers`` installed.
+Deterministic stages run with no API key. The ``embed`` stage uses the configured embedding model;
+OpenAI models require ``OPENAI_API_KEY`` and local BGE models require ``sentence-transformers``.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def run(
 
     def get_embedder():
         if _embedder["e"] is None:
-            _embedder["e"] = embed.BgeEmbedder()
+            _embedder["e"] = embed.get_embedder()
         return _embedder["e"]
 
     raw_docs = lambda: list_artifacts("raw", "txt", base=base)          # noqa: E731

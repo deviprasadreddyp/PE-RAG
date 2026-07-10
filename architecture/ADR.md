@@ -101,24 +101,22 @@ isolation dead-letters bad docs; a query log captures the full retrieval trace a
 **Consequences.** Any answer is traceable to its evidence and every stage is independently inspectable;
 slightly more disk I/O — a worthwhile trade for trust and debuggability.
 
-## ADR-013 — Local `BAAI/bge-large-en-v1.5` embeddings ✅ (supersedes ADR-004)
-**Context.** OpenAI embeddings are a paid dependency with a per-query network hop; a strong open
-model removes both while keeping retrieval quality high.
-**Decision.** **Local `BAAI/bge-large-en-v1.5`** via `sentence-transformers` (1024-dim, cosine-
-normalized), behind the existing `Embedder` protocol. Queries get the bge instruction prefix;
-passages get none. Content-hash cache unchanged; model-namespaced collection (ADR-010) rolls to a
-fresh index automatically.
-**Consequences.** No API key or network call for embeddings; runs locally/offline. Adds a
-`sentence-transformers`/torch dependency (lazy-imported; shared with the reranker) — heavier install,
-and best on Python 3.11-3.12 (the Docker image). Bge cosine scores skew higher, so similarity
-thresholds are tunable via the eval set.
+## ADR-013 — OpenAI `text-embedding-3-large` embeddings ✅ (reinstates ADR-004)
+**Context.** For the priority MVP, OpenAI embeddings avoid slow local CPU/GPU setup while keeping
+strong retrieval quality. The API cost for the priority SEC subset is small enough to be acceptable.
+**Decision.** **OpenAI `text-embedding-3-large`** is the default embedding model, behind the existing
+`Embedder` protocol. Content-hash cache unchanged; model-namespaced collection (ADR-010) rolls to a
+fresh index automatically. `text-embedding-3-small` and local BGE remain one-setting alternatives.
+**Consequences.** Requires `OPENAI_API_KEY` and network access during embedding/query-vector
+generation. Indexing is faster and more reproducible across machines than local BGE on CPU. The
+dimension/cost can be reduced by switching to `text-embedding-3-small` if needed.
 
 ## ADR-014 — OpenAI models via OpenRouter for generation ✅ (supersedes ADR-005)
 **Context.** The project owner wants ChatGPT-family generation and a single provider key that can
 reach many models.
 **Decision.** The one grounded call uses **`openai/gpt-4o` via OpenRouter** — LangChain `ChatOpenAI`
 pointed at OpenRouter's OpenAI-compatible `base_url`, with `.with_structured_output(AnswerBody)`.
-`OPENROUTER_API_KEY` is the only key the system needs (embeddings + reranker are local).
+`OPENROUTER_API_KEY` is used for generation; `OPENAI_API_KEY` is used for embeddings.
 **Consequences.** One API request, structured output, provider-swappable by changing
 `generation_model` (any OpenRouter model id) — no code change. Also removes the latent
 `langchain-anthropic` dependency (never in requirements); `langchain-openai` is. Single-call

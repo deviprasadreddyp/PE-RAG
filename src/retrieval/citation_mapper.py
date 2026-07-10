@@ -15,9 +15,9 @@ from src.schemas import AnswerBody, Citation, Evidence
 _EID = re.compile(r"\bE(\d+)\b")
 
 
-def referenced_ids(body: AnswerBody) -> list[str]:
-    """Evidence ids the answer cites: explicit ``citations`` first, then ``[E#]`` found in the text."""
-    ids: list[str] = list(body.citations)
+def inline_ids(body: AnswerBody) -> list[str]:
+    """Evidence ids that appear in answer prose fields as ``[E#]`` tokens."""
+    ids: list[str] = []
     text = " ".join([body.executive_summary, body.comparison, body.supporting_evidence,
                      body.limitations])
     for m in _EID.finditer(text):
@@ -25,6 +25,29 @@ def referenced_ids(body: AnswerBody) -> list[str]:
         if eid not in ids:
             ids.append(eid)
     return ids
+
+
+def referenced_ids(body: AnswerBody) -> list[str]:
+    """Evidence ids the answer cites: explicit ``citations`` first, then ``[E#]`` found in the text."""
+    ids: list[str] = list(body.citations)
+    for eid in inline_ids(body):
+        if eid not in ids:
+            ids.append(eid)
+    return ids
+
+
+def with_complete_source_list(body: AnswerBody, evidence: list[Evidence]) -> AnswerBody:
+    """Return a body whose source list covers every final evidence block sent to generation.
+
+    Inline ``[E#]`` citations remain the model's claim-level support. The structured
+    ``citations`` field powers the UI/source list, so we deterministically append any final
+    evidence ids that were in the prompt but omitted from the model's source list.
+    """
+    ids = referenced_ids(body)
+    for e in evidence:
+        if e.evidence_id not in ids:
+            ids.append(e.evidence_id)
+    return body.model_copy(update={"citations": ids})
 
 
 def map_citations(body: AnswerBody, evidence: list[Evidence]) -> list[Citation]:

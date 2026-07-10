@@ -7,8 +7,9 @@ import pytest
 from src.config import Settings
 
 _ENVS = (
-    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY", "OPENROUTER_API_KEY",
     "CHUNK_MAX_CHARS", "CHUNK_OVERLAP", "EMBEDDING_MODEL", "GENERATION_MODEL",
+    "GENERATION_MAX_OUTPUT_TOKENS", "GENERATION_REASONING_EFFORT", "GENERATION_VERBOSITY",
 )
 
 
@@ -26,9 +27,11 @@ def _mk(**kw) -> Settings:
 
 def test_defaults():
     s = _mk()
-    assert s.embedding_model == "BAAI/bge-large-en-v1.5"
-    assert s.generation_model == "openai/gpt-4o"
-    assert s.openrouter_base_url.endswith("openrouter.ai/api/v1")
+    assert s.embedding_model == "text-embedding-3-large"
+    assert s.generation_model == "gpt-5.5"
+    assert s.generation_max_output_tokens == 6000
+    assert s.generation_reasoning_effort == "low"
+    assert s.generation_verbosity == "medium"
     assert s.chunk_max_chars > s.chunk_overlap >= 0
     assert s.data_dir == "data"
     assert s.corpus_dir == "edgar_corpus"
@@ -37,15 +40,19 @@ def test_defaults():
 def test_collection_name_includes_embedding_model():
     s = _mk()
     assert s.collection_base in s.collection_name
-    assert "bge-large-en-v1.5" in s.collection_name          # "/" sanitized: BAAI-bge-large-en-v1.5
+    assert "text-embedding-3-large" in s.collection_name
 
 
 def test_env_loading(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     monkeypatch.setenv("CHUNK_MAX_CHARS", "800")
+    monkeypatch.setenv("GENERATION_MODEL", "gpt-5.4-mini")
     s = _mk()
+    assert s.openai_api_key.get_secret_value() == "sk-test"
     assert s.openrouter_api_key.get_secret_value() == "sk-or-test"
     assert s.chunk_max_chars == 800
+    assert s.generation_model == "gpt-5.4-mini"
 
 
 def test_kwarg_override():
@@ -77,14 +84,15 @@ def test_retrieval_field_bounds_enforced():
 
 
 def test_secret_not_exposed_in_repr():
-    s = _mk(openrouter_api_key="sk-should-stay-hidden")
+    s = _mk(openai_api_key="sk-should-stay-hidden", openrouter_api_key="sk-or-should-stay-hidden")
     assert "sk-should-stay-hidden" not in repr(s)
+    assert "sk-or-should-stay-hidden" not in repr(s)
 
 
 def test_require_key_guards():
     with pytest.raises(RuntimeError):
-        _mk().require_openrouter_key()
-    assert _mk(openrouter_api_key="sk-x").require_openrouter_key() == "sk-x"
+        _mk().require_openai_key()
+    assert _mk(openai_api_key="sk-x").require_openai_key() == "sk-x"
 
 
 def test_embedding_policy_defaults(monkeypatch):

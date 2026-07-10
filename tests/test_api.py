@@ -36,6 +36,13 @@ def test_health(monkeypatch):
     assert body["status"] == "ok" and "chunks" in body and "bm25" in body
 
 
+def test_root_serves_web_app():
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "PE-RAG Analyst" in r.text
+    assert "/assets/app.js" in r.text
+
+
 def test_query_happy(monkeypatch):
     monkeypatch.setattr(main, "run_query", lambda q, **kw: _ok_result())
     r = client.post("/query", json={"question": "What are Apple's risk factors?"})
@@ -52,11 +59,35 @@ def test_query_debug_returns_trace(monkeypatch):
     assert r.json()["trace"]["plan"] == "global"
 
 
+def test_query_stream_returns_progress_and_done(monkeypatch):
+    monkeypatch.setattr(main, "run_query", lambda q, **kw: _ok_result())
+    r = client.post("/query-stream", json={"question": "Apple risk", "debug": True})
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers["content-type"]
+    assert '"type": "answer_delta"' in r.text
+    assert '"type": "done"' in r.text
+    assert "Apple faces supply risk" in r.text
+
+
 def test_query_refusal(monkeypatch):
     monkeypatch.setattr(main, "run_query", lambda q, **kw: _refusal_result())
     r = client.post("/query", json={"question": "compare the leading automakers"})
     body = r.json()
     assert body["refused"] and "Information unavailable" in body["answer"]
+
+
+def test_query_fails_closed_on_pipeline_error(monkeypatch):
+    def boom(q, **kw):
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr(main, "run_query", boom)
+    r = client.post("/query", json={"question": "Apple risk factors", "debug": True})
+    body = r.json()
+    assert r.status_code == 200
+    assert body["refused"]
+    assert "Information unavailable" in body["answer"]
+    assert body["trace"]["stage"] == "api_fallback"
+    assert body["trace"]["error_type"] == "RuntimeError"
 
 
 def test_empty_question_is_422():

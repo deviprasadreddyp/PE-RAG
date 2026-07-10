@@ -51,6 +51,12 @@ def test_crossrefs_only_falls_back_to_other():
     assert len(spans) == 1 and spans[0].section_name == "Other"
 
 
+def test_lowercase_title_after_item_is_not_a_heading():
+    doc = "Part II, Item 1A of the 2024 Form 10-K under the heading Risk Factors. " * 20
+    spans = detect_sections(doc)
+    assert len(spans) == 1 and spans[0].section_name == "Other"
+
+
 def test_no_items_single_other_span():
     spans = detect_sections("Plain filing text with no item headings at all. " * 20)
     assert len(spans) == 1 and spans[0].item == "" and spans[0].end == len(
@@ -77,12 +83,30 @@ def test_10k_canonical_names_and_part_tree():
     assert by_item[""].part == ""                             # the leading "Other" span
 
 
+def test_10k_drops_late_backtracking_item_hits():
+    doc = (
+        "Item 1. Business" + FILL
+        + "Item 1A. Risk Factors" + FILL
+        + "Item 1B. Unresolved Staff Comments" + FILL
+        + "Item 1A. Risk Factors are incorporated by reference elsewhere. " + FILL
+        + "Item 2. Properties" + FILL
+    )
+    items = [s.item for s in detect_sections(doc, "10-K")]
+    assert items == ["Item 1", "Item 1A", "Item 1B", "Item 2"]
+
+
 def test_10q_keeps_detected_title_and_no_part():
     spans = detect_sections(DOC, "10-Q")
     by_item = {s.item: s for s in spans}
     # 10-Q items are Part-ambiguous: keep the detected title, never canonicalize/guess a Part
     assert "Management" in by_item["Item 7"].section_name    # detected title, not forced canonical
     assert all(s.part == "" for s in spans)
+
+
+def test_10q_obvious_titles_are_canonicalized():
+    doc = "ITEM 1A. RISK FACTORSOur operations are risky. " + FILL
+    spans = detect_sections(doc, "10-Q")
+    assert spans[0].section_name == "Risk Factors"
 
 
 def test_run_sections_reads_cleaned_writes_json(tmp_path):

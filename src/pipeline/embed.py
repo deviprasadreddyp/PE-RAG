@@ -1,16 +1,15 @@
 """Stage 7 — embedding generation.
 
 Embed each chunk's ``embed_text`` (the enriched text from Stage 6) with an ``Embedder``
-(default: **local** ``BAAI/bge-large-en-v1.5`` via ``sentence-transformers`` — no API, 1024-dim,
-cosine-normalized). Only cache-misses are encoded; every vector is cached by
+(default: OpenAI ``text-embedding-3-large``; local BGE remains swappable). Only cache-misses are encoded; every vector is cached by
 ``sha256(model + embed_text)`` under ``data/.embedding_cache/`` so re-runs (and identical chunks
 across filings) are never re-embedded. Persist ``{chunk_id, embedding, metadata}`` per document to
 ``data/embeddings/<doc_id>.json``.
 
-The model is loaded lazily only when a real ``BgeEmbedder`` is constructed — importing this module
-never requires the ``sentence-transformers`` package.
+Providers are loaded lazily only when a real embedder is constructed; importing this module never
+requires API keys or ``sentence-transformers``.
 
-Run standalone:  python -m src.pipeline.embed   (needs: pip install sentence-transformers)
+Run standalone:  python -m src.pipeline.embed
 """
 
 from __future__ import annotations
@@ -32,6 +31,39 @@ class Embedder(Protocol):
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]: ...
     def embed_query(self, text: str) -> list[float]: ...
+
+
+def is_openai_embedding_model(model: str) -> bool:
+    return model.startswith("text-embedding-")
+
+
+class OpenAIEmbedder:
+    """OpenAI embeddings backend using the official SDK."""
+
+    def __init__(self, model: str | None = None):
+        from openai import OpenAI  # lazy: tests and non-embedding stages do not need it at import time
+
+        self.model = model or settings.embedding_model
+        self._client = OpenAI(
+            api_key=settings.require_openai_key(),
+            max_retries=settings.embed_max_retries,
+            timeout=60,
+        )
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for i in range(0, len(texts), settings.embed_batch_size):
+            batch = texts[i:i + settings.embed_batch_size]
+            response = self._client.embeddings.create(model=self.model, input=batch)
+            data = sorted(response.data, key=lambda item: item.index)
+            vectors.extend([item.embedding for item in data])
+        return vectors
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._embed(list(texts))
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed([text])[0]
 
 
 class BgeEmbedder:
@@ -61,6 +93,14 @@ class BgeEmbedder:
 
     def embed_query(self, text: str) -> list[float]:
         return self._encode([self.QUERY_INSTRUCTION + text])[0]
+
+
+def get_embedder(model: str | None = None) -> Embedder:
+    """Construct the configured embedder backend."""
+    chosen = model or settings.embedding_model
+    if is_openai_embedding_model(chosen):
+        return OpenAIEmbedder(chosen)
+    return BgeEmbedder(chosen)
 
 
 def cache_key(model: str, text: str) -> str:
@@ -96,7 +136,7 @@ def embed_texts(texts: list[str], embedder: Embedder, cache: EmbeddingCache) -> 
 
 
 def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> dict:
-    embedder = embedder or BgeEmbedder()
+    embedder = embedder or get_embedder()
     cache = EmbeddingCache(base=base)
     chunks = [Chunk(**c) for c in load_artifact("chunks", doc_id, base=base)]
     texts = [c.embed_text or c.text for c in chunks]                   # embed the enriched text
@@ -111,7 +151,7 @@ def run_embed(doc_id: str, *, embedder: Embedder | None = None, base=None) -> di
 
 
 def run_all(*, embedder: Embedder | None = None, base=None) -> dict:
-    embedder = embedder or BgeEmbedder()                               # load the model once
+    embedder = embedder or get_embedder()                              # load the model once
     r = run_docs("embed", list_artifacts("chunks", base=base),
                  lambda d: run_embed(d, embedder=embedder, base=base), base=base)
     return {"files": r["ok"], "failed": r["failed"],

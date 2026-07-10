@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 REGRESSION_TOLERANCE = 0.02        # a metric drop larger than this is a regression
+LOWER_IS_BETTER = ("latency", "cost", "tokens")
 
 
 def flat_summary(report: dict) -> dict:
@@ -38,7 +39,13 @@ def compare_to_previous(current: dict, previous: dict, *, tolerance: float = REG
         if key not in previous:
             continue
         delta = round(cur - previous[key], 4)
-        if delta < -tolerance:
+        lower_is_better = any(term in key for term in LOWER_IS_BETTER)
+        if lower_is_better:
+            if delta > tolerance:
+                regressions.append({"metric": key, "prev": previous[key], "cur": cur, "delta": delta})
+            elif delta < -tolerance:
+                improvements.append({"metric": key, "prev": previous[key], "cur": cur, "delta": delta})
+        elif delta < -tolerance:
             regressions.append({"metric": key, "prev": previous[key], "cur": cur, "delta": delta})
         elif delta > tolerance:
             improvements.append({"metric": key, "prev": previous[key], "cur": cur, "delta": delta})

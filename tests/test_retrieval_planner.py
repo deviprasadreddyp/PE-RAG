@@ -16,6 +16,8 @@ def test_trend_is_per_period():
     plan = plan_retrieval(parse_query("How has NVIDIA's revenue changed over the years?"))
     assert plan.mode == "per_period"
     assert plan.pool_size == settings.candidate_pool
+    assert "Management's Discussion and Analysis" in plan.section_boosts
+    assert "Financial Statements and Supplementary Data" in plan.section_boosts
 
 
 def test_single_risk_is_global_with_risk_boost():
@@ -29,6 +31,20 @@ def test_financial_boosts_when_no_explicit_section():
     # "results of operations"/"operating" -> MD&A; ensure a financial section is boosted
     assert any("Management's Discussion" in s or "Financial Statements" in s
                for s in plan.section_boosts)
+
+
+def test_financial_lookup_boosts_mda_and_financials():
+    plan = plan_retrieval(parse_query("What was Alphabet's advertising revenue?"))
+    assert "Management's Discussion and Analysis" in plan.section_boosts
+    assert "Financial Statements and Supplementary Data" in plan.section_boosts
+    assert "financial" in plan.facets
+
+
+def test_business_segments_boosts_business_and_mda():
+    plan = plan_retrieval(parse_query("Summarize Amazon's business segments"))
+    assert "Business" in plan.section_boosts
+    assert "Management's Discussion and Analysis" in plan.section_boosts
+    assert "segments" in plan.facets
 
 
 def test_general_query_is_global_no_boost():
